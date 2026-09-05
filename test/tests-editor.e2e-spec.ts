@@ -1,0 +1,132 @@
+import type { INestApplication } from "@nestjs/common";
+import request from "supertest";
+import { createTestApp } from "./utils/create-test-app";
+import { loginAs } from "./utils/login";
+
+describe("tests editor (e2e)", () => {
+  let app: INestApplication;
+  let curatorToken: string;
+
+  beforeAll(async () => {
+    app = await createTestApp();
+    curatorToken = await loginAs(app, "curator");
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("GET /tests/:lessonOrder — null, если теста нет", async () => {
+    const res = await request(app.getHttpServer())
+      .get("/tests/7")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .expect(200);
+    expect(res.body).toBeNull();
+  });
+
+  it("POST /tests — повторный вызов для того же урока возвращает существующий тест", async () => {
+    const first = await request(app.getHttpServer())
+      .post("/tests")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ lessonOrder: 8 })
+      .expect(201);
+    const second = await request(app.getHttpServer())
+      .post("/tests")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ lessonOrder: 8 })
+      .expect(201);
+    expect(second.body.id).toBe(first.body.id);
+  });
+
+  it("публикация без вопросов — 400 (TЗ инвариант 10)", async () => {
+    const test = await request(app.getHttpServer())
+      .post("/tests")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ lessonOrder: 9 });
+    await request(app.getHttpServer())
+      .patch(`/tests/${test.body.id}`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ status: "published" })
+      .expect(400);
+  });
+
+  it("вопрос/вариант/публикация/эксклюзивность single-choice/удаление с перенумерацией", async () => {
+    const test = await request(app.getHttpServer())
+      .post("/tests")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ lessonOrder: 11 });
+    const testId = test.body.id;
+
+    const q1 = await request(app.getHttpServer())
+      .post(`/tests/${testId}/questions`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .expect(201);
+    expect(q1.body.questions).toHaveLength(1);
+    expect(q1.body.questions[0].options).toHaveLength(4);
+    expect(q1.body.questions[0].options[0].isCorrect).toBe(true);
+
+    const q2 = await request(app.getHttpServer())
+      .post(`/tests/${testId}/questions`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .expect(201);
+    expect(q2.body.questions).toHaveLength(2);
+    expect(q2.body.questions[1].order).toBe(2);
+
+    // Публикация теперь проходит (>= 1 вопрос).
+    const published = await request(app.getHttpServer())
+      .patch(`/tests/${testId}`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ status: "published" })
+      .expect(200);
+    expect(published.body.status).toBe("published");
+
+    const question = q1.body.questions[0];
+    await request(app.getHttpServer())
+      .patch(`/questions/${question.id}`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ text: "Вопрос 1", type: "single" })
+      .expect(200);
+
+    // Отмечаем второй вариант правильным — для single первый должен автоматически стать неправильным.
+    const secondOptionId = question.options[1].id;
+    const afterExclusive = await request(app.getHttpServer())
+      .patch(`/options/${secondOptionId}`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ isCorrect: true })
+      .expect(200);
+    const q1After = afterExclusive.body.questions.find((q: { id: string }) => q.id === question.id);
+    expect(q1After.options.find((o: { id: string }) => o.id === secondOptionId).isCorrect).toBe(true);
+    expect(q1After.options.find((o: { id: string }) => o.id === question.options[0].id).isCorrect).toBe(
+      false,
+    );
+
+    // Удаляем первый вопрос — второй должен перенумероваться в order=1.
+    const afterDelete = await request(app.getHttpServer())
+      .delete(`/questions/${question.id}`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .expect(200);
+    expect(afterDelete.body.questions).toHaveLength(1);
+    expect(afterDelete.body.questions[0].order).toBe(1);
+  });
+
+  it("DELETE /tests/:id — удаляет тест", async () => {
+    const test = await request(app.getHttpServer())
+      .post("/tests")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ lessonOrder: 12 });
+    await request(app.getHttpServer())
+      .delete(`/tests/${test.body.id}`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .expect(204);
+    const check = await request(app.getHttpServer())
+      .get("/tests/12")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .expect(200);
+    expect(check.body).toBeNull();
+  });
+
+  it("student → 403 на редактор теста", async () => {
+    const token = await loginAs(app, "kanat");
+    await request(app.getHttpServer()).get("/tests/1").set("Authorization", `Bearer ${token}`).expect(403);
+  });
+});

@@ -18,6 +18,8 @@ import { GroupsModule } from "./modules/groups/groups.module";
 import { ProgressModule } from "./modules/progress/progress.module";
 import { NotesModule } from "./modules/notes/notes.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
+import { TeachersModule } from "./modules/teachers/teachers.module";
+import { MeetingsModule } from "./modules/meetings/meetings.module";
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
     ProgressModule,
     NotesModule,
     DashboardModule,
+    TeachersModule,
+    MeetingsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

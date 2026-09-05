@@ -21,4 +21,22 @@ export class LessonsRepository {
     });
     return new Set(rows.map((r) => r.lessonOrder));
   }
+
+  countOpened(order: number) {
+    return this.prisma.student.count({ where: { openedUpTo: { gte: order } } });
+  }
+
+  countCompleted(order: number) {
+    return this.prisma.studentLesson.count({ where: { lessonOrder: order, completedAt: { not: null } } });
+  }
+
+  countInProgress(order: number) {
+    return this.prisma.studentLesson.count({
+      where: { lessonOrder: order, completedAt: null, watchedPct: { gt: 0 } },
+    });
+  }
+
+  update(order: number, data: { title?: string; description?: string; videoUrl?: string }) {
+    return this.prisma.lesson.update({ where: { order }, data });
+  }
 }

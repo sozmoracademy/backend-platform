@@ -77,4 +77,81 @@ export class TestsRepository {
       where: { studentId_lessonOrder: { studentId, lessonOrder } },
     });
   }
+
+  /* ---------- редактор теста (роль curator) ---------- */
+
+  findLessonByOrder(order: number) {
+    return this.prisma.lesson.findUnique({ where: { order } });
+  }
+
+  createTest(data: { lessonOrder: number; title: string }) {
+    return this.prisma.lessonTest.create({
+      data: { lessonOrder: data.lessonOrder, title: data.title },
+      include: { questions: { include: { options: true }, orderBy: { order: "asc" } } },
+    });
+  }
+
+  updateTest(
+    id: string,
+    data: { title?: string; timeLimitSec?: number; passingScore?: number; status?: "draft" | "published" },
+  ) {
+    return this.prisma.lessonTest.update({
+      where: { id },
+      data,
+      include: { questions: { include: { options: true }, orderBy: { order: "asc" } } },
+    });
+  }
+
+  deleteTest(id: string) {
+    return this.prisma.lessonTest.delete({ where: { id } });
+  }
+
+  createQuestion(testId: string, order: number) {
+    return this.prisma.testQuestion.create({
+      data: {
+        testId,
+        order,
+        type: "single",
+        options: { create: [0, 1, 2, 3].map((i) => ({ text: "", isCorrect: i === 0 })) },
+      },
+    });
+  }
+
+  findQuestionById(id: string) {
+    return this.prisma.testQuestion.findUnique({ where: { id }, include: { options: true } });
+  }
+
+  updateQuestion(id: string, data: { text?: string; type?: "single" | "multiple" }) {
+    return this.prisma.testQuestion.update({ where: { id }, data });
+  }
+
+  deleteQuestion(id: string) {
+    return this.prisma.testQuestion.delete({ where: { id } });
+  }
+
+  findRemainingQuestionsOrdered(testId: string) {
+    return this.prisma.testQuestion.findMany({ where: { testId }, orderBy: { order: "asc" } });
+  }
+
+  reorderQuestion(id: string, order: number) {
+    return this.prisma.testQuestion.update({ where: { id }, data: { order } });
+  }
+
+  findOptionById(id: string) {
+    return this.prisma.questionOption.findUnique({
+      where: { id },
+      include: { question: { include: { options: true } } },
+    });
+  }
+
+  updateOption(id: string, data: { text?: string; isCorrect?: boolean }) {
+    return this.prisma.questionOption.update({ where: { id }, data });
+  }
+
+  exclusivifyOptions(questionId: string, exceptOptionId: string) {
+    return this.prisma.questionOption.updateMany({
+      where: { questionId, id: { not: exceptOptionId } },
+      data: { isCorrect: false },
+    });
+  }
 }
