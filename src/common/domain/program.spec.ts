@@ -1,4 +1,11 @@
-import { monthOfLesson, levelForLesson } from "./program";
+import {
+  monthOfLesson,
+  levelForLesson,
+  stageStatus,
+  courseLevels,
+  levelStatus,
+  type CourseStage,
+} from "./program";
 
 const LEVEL_PLAN = [
   { month: 1, level: "A1" as const },
@@ -32,5 +39,43 @@ describe("levelForLesson", () => {
 
   it("фоллбек на A1, если план не покрывает месяц", () => {
     expect(levelForLesson([], 1)).toBe("A1");
+  });
+});
+
+describe("stageStatus", () => {
+  it("completed, если все уроки блока завершены", () => {
+    expect(stageStatus([1, 2], 2, new Set([1, 2]))).toBe("completed");
+  });
+  it("current, если хотя бы один урок блока открыт, но не всё завершено", () => {
+    expect(stageStatus([1, 2, 3], 2, new Set([1]))).toBe("current");
+  });
+  it("locked, если ни один урок блока не открыт", () => {
+    expect(stageStatus([5, 6], 2, new Set())).toBe("locked");
+  });
+  it("locked для пустого блока", () => {
+    expect(stageStatus([], 2, new Set())).toBe("locked");
+  });
+});
+
+describe("courseLevels / levelStatus", () => {
+  const stages: CourseStage[] = [
+    { block: "Foundation", level: "A1", month: 1 },
+    { block: "Grammar Core", level: "A2", month: 2 },
+  ];
+
+  it("courseLevels возвращает уникальные уровни в порядке появления", () => {
+    expect(courseLevels(stages)).toEqual(["A1", "A2"]);
+  });
+
+  it("levelStatus: completed, если все блоки уровня completed", () => {
+    expect(levelStatus("A1", stages, () => "completed")).toBe("completed");
+  });
+
+  it("levelStatus: current, если хотя бы один блок current/completed", () => {
+    expect(levelStatus("A1", stages, () => "current")).toBe("current");
+  });
+
+  it("levelStatus: locked, если все блоки уровня locked", () => {
+    expect(levelStatus("A1", stages, () => "locked")).toBe("locked");
   });
 });

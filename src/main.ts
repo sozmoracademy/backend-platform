@@ -1,6 +1,6 @@
 import "reflect-metadata";
-import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
+import { NestFactory, Reflector } from "@nestjs/core";
+import { ClassSerializerInterceptor, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
@@ -25,6 +25,10 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  // Защита в глубину (BACKEND.md §8): применяет @Exclude()/@Expose() из Response DTO,
+  // если сервис когда-нибудь вернёт объект как экземпляр класса, а не только вручную
+  // замапленный литерал (как сейчас делают все мапперы).
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   if (config.get<string>("env") !== "production") {
     const document = SwaggerModule.createDocument(

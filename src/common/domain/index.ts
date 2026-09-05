@@ -9,3 +9,4 @@ export * from "./group-health";
 export * from "./attention";
 export * from "./credentials";
 export * from "./groups";
+export * from "./schedule";

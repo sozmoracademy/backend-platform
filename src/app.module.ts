@@ -9,6 +9,9 @@ import { PrismaExceptionFilter } from "./common/filters/prisma-exception.filter"
 import { HealthModule } from "./modules/health/health.module";
 import { UsersModule } from "./modules/users/users.module";
 import { AuthModule } from "./modules/auth/auth.module";
+import { CoursesModule } from "./modules/courses/courses.module";
+import { LessonsModule } from "./modules/lessons/lessons.module";
+import { StudentCabinetModule } from "./modules/student-cabinet/student-cabinet.module";
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { AuthModule } from "./modules/auth/auth.module";
     HealthModule,
     UsersModule,
     AuthModule,
+    CoursesModule,
+    LessonsModule,
+    StudentCabinetModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -47,9 +47,22 @@ export function nextStepFor<
   tests: TTest[];
   attempts: TAttempt[];
   meetings: TMeeting[];
+  /** Дата (`YYYY-MM-DD`) — только для сравнения с датами практик, не с `expiresAt` попыток. */
   today: string;
+  /** Полный ISO-момент «сейчас» — для сравнения с `expiresAt` попыток (может не совпадать
+   * по гранулярности с `today`: `today` — календарная дата, `now` — точное время). */
+  now?: string;
 }): NextStep<TLesson, TMeeting> {
-  const { openedUpTo, completedOrders, lessons, tests, attempts, meetings, today } = params;
+  const {
+    openedUpTo,
+    completedOrders,
+    lessons,
+    tests,
+    attempts,
+    meetings,
+    today,
+    now = new Date().toISOString(),
+  } = params;
 
   for (let order = 1; order <= openedUpTo; order++) {
     if (!completedOrders.has(order)) {
@@ -64,7 +77,7 @@ export function nextStepFor<
     const test = tests.find((t) => t.lessonOrder === order);
     if (!test) continue;
     const testAttempts = attempts.filter((a) => a.lessonOrder === order);
-    const availability = testAvailability(test.status, true, testAttempts, today);
+    const availability = testAvailability(test.status, true, testAttempts, now);
     if (availability === "available" || availability === "failed" || availability === "in_progress") {
       const lesson = lessons.find((l) => l.order === order);
       if (lesson) {
