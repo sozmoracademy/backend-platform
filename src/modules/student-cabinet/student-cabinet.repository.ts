@@ -77,4 +77,10 @@ export class StudentCabinetRepository {
   updateLastActivity(studentId: string, today: Date) {
     return this.prisma.student.update({ where: { id: studentId }, data: { lastActivity: today } });
   }
+
+  /** Тестовое видео (TЗ §4.3) — временно подменяет `videoUrl` во всех уроках. */
+  async findPreviewVideoUrl(): Promise<string | null> {
+    const row = await this.prisma.appSettings.findUnique({ where: { id: "singleton" } });
+    return row?.previewVideoUrl ?? null;
+  }
 }

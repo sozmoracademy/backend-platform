@@ -3,12 +3,14 @@ import { NestFactory, Reflector } from "@nestjs/core";
 import { ClassSerializerInterceptor, ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { Logger } from "nestjs-pino";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
   const config = app.get(ConfigService);
 
   app.use(helmet());
@@ -48,7 +50,7 @@ async function bootstrap() {
   const port = config.get<number>("port") ?? 3000;
   await app.listen(port);
 
-  console.log(`Sozmor backend запущен на :${port}`);
+  app.get(Logger).log(`Sozmor backend запущен на :${port}`);
 }
 
 void bootstrap();

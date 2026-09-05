@@ -11,11 +11,23 @@ export class HealthController {
   @Public()
   @Get()
   async check() {
+    const startedAt = Date.now();
     try {
       await this.prisma.$queryRaw`SELECT 1`;
-      return { status: "ok" };
+      return {
+        status: "ok",
+        db: "ok",
+        dbLatencyMs: Date.now() - startedAt,
+        uptimeSec: Math.round(process.uptime()),
+        timestamp: new Date().toISOString(),
+      };
     } catch {
-      throw new ServiceUnavailableException({ status: "error" });
+      throw new ServiceUnavailableException({
+        status: "error",
+        db: "error",
+        uptimeSec: Math.round(process.uptime()),
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 }

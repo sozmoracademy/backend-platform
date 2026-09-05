@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "./infra/config/config.module";
 import { PrismaModule } from "./infra/prisma/prisma.module";
+import { LoggerModule } from "./infra/logger/logger.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { PrismaExceptionFilter } from "./common/filters/prisma-exception.filter";
 import { HealthModule } from "./modules/health/health.module";
@@ -25,6 +26,7 @@ import { MeetingsModule } from "./modules/meetings/meetings.module";
   imports: [
     ConfigModule,
     PrismaModule,
+    LoggerModule,
     ThrottlerModule.forRoot({
       throttlers: [
         {

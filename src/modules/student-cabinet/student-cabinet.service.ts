@@ -371,6 +371,7 @@ export class StudentCabinetService {
     const nextLesson = lessons.find((l) => l.order === order + 1);
     const nextLocked = nextLesson ? nextLesson.order > student.openedUpTo : true;
     const test = this.lessonTestSummary(order, testsPlain, attemptsPlain, state === "completed", now);
+    const previewVideoUrl = await this.repo.findPreviewVideoUrl();
 
     return {
       order: lesson.order,
@@ -379,7 +380,7 @@ export class StudentCabinetService {
       duration: lesson.duration,
       block: lesson.block,
       state,
-      videoUrl: state === "locked" ? "" : lesson.videoUrl,
+      videoUrl: state === "locked" ? "" : (previewVideoUrl ?? lesson.videoUrl),
       watchedPct: completedOrders.has(order) ? 100 : (watchedByOrder.get(order) ?? 0),
       ...(prevLesson ? { prev: { order: prevLesson.order, title: prevLesson.title } } : {}),
       ...(nextLesson ? { next: { order: nextLesson.order, title: nextLesson.title } } : {}),

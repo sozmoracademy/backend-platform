@@ -32,4 +32,23 @@ export class CoursesService {
       month: b.month,
     }));
   }
+
+  /**
+   * Тестовое видео (TЗ §4.3) — не входит в перечень эндпоинтов BACKEND.md §12
+   * (расхождение с фактическим MSW-контрактом фронта, см. отчёт по расхождениям),
+   * временно подменяет `videoUrl` во всех уроках. Хранится в singleton `AppSettings`.
+   */
+  async previewVideo(): Promise<{ url: string | null }> {
+    const row = await this.prisma.appSettings.findUnique({ where: { id: "singleton" } });
+    return { url: row?.previewVideoUrl ?? null };
+  }
+
+  async setPreviewVideo(url: string | null): Promise<{ url: string | null }> {
+    const row = await this.prisma.appSettings.upsert({
+      where: { id: "singleton" },
+      update: { previewVideoUrl: url },
+      create: { id: "singleton", previewVideoUrl: url },
+    });
+    return { url: row.previewVideoUrl };
+  }
 }

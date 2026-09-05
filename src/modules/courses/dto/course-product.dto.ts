@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { IsOptional, IsString } from "class-validator";
 import type { CourseType, Lang } from "@prisma/client";
 import type { CefrLevel } from "../../../common/domain";
 
@@ -24,4 +25,16 @@ export class CourseBlockDto {
   @ApiProperty() title!: string;
   @ApiProperty({ enum: ["A1", "A2", "B1", "B2"] }) level!: CefrLevel;
   @ApiProperty() month!: number;
+}
+
+/** Тестовое видео (TЗ §4.3) — временно подменяет `videoUrl` во всех уроках. */
+export class PreviewVideoDto {
+  @ApiProperty({ nullable: true }) url!: string | null;
+}
+
+export class SetPreviewVideoRequestDto {
+  @ApiProperty({ nullable: true })
+  @IsOptional()
+  @IsString()
+  url!: string | null;
 }
