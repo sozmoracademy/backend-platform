@@ -12,6 +12,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { CoursesModule } from "./modules/courses/courses.module";
 import { LessonsModule } from "./modules/lessons/lessons.module";
 import { StudentCabinetModule } from "./modules/student-cabinet/student-cabinet.module";
+import { TestsModule } from "./modules/tests/tests.module";
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { StudentCabinetModule } from "./modules/student-cabinet/student-cabinet.
     CoursesModule,
     LessonsModule,
     StudentCabinetModule,
+    TestsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

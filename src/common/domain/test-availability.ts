@@ -1,4 +1,6 @@
 export type TestAvailability = "locked" | "available" | "in_progress" | "passed" | "failed";
+/** Причина блокировки — считается на сервере (FRONTEND.md §7). */
+export type TestLockedReason = "lesson_not_completed" | "not_published";
 
 export interface AttemptLike {
   status: "in_progress" | "submitted";

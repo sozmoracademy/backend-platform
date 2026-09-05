@@ -2,7 +2,7 @@ import { Body, Controller, ForbiddenException, Get, Param, Post } from "@nestjs/
 import { ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { CurrentUser, type CurrentUserPayload } from "../../common/decorators/current-user.decorator";
-import { LessonOrderParamDto } from "./dto/lesson-order-param.dto";
+import { OrderParamDto } from "../../common/dto/order-param.dto";
 import { StudentCabinetService } from "./student-cabinet.service";
 import {
   LessonDetailDto,
@@ -48,7 +48,7 @@ export class StudentCabinetController {
   @Get("lessons/:order")
   lessonDetail(
     @CurrentUser() user: CurrentUserPayload,
-    @Param() params: LessonOrderParamDto,
+    @Param() params: OrderParamDto,
   ): Promise<LessonDetailDto> {
     return this.cabinet.lessonDetail(this.studentId(user), params.order);
   }
@@ -56,7 +56,7 @@ export class StudentCabinetController {
   @Post("lessons/:order/watch")
   watch(
     @CurrentUser() user: CurrentUserPayload,
-    @Param() params: LessonOrderParamDto,
+    @Param() params: OrderParamDto,
     @Body() body: WatchProgressRequestDto,
   ): Promise<WatchProgressResponseDto> {
     return this.cabinet.watch(this.studentId(user), params.order, body.pct);
