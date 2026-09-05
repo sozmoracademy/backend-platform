@@ -44,7 +44,10 @@ describe("nextStepFor", () => {
       meetings: [{ id: "m1", date: today, startTime: "20:00", status: "scheduled" }],
       today,
     });
-    expect(step).toEqual({ kind: "practice", meeting: { id: "m1", date: today, startTime: "20:00", status: "scheduled" } });
+    expect(step).toEqual({
+      kind: "practice",
+      meeting: { id: "m1", date: today, startTime: "20:00", status: "scheduled" },
+    });
   });
 
   it("kind=done с ближайшей практикой, если сегодня активностей нет", () => {
@@ -57,7 +60,10 @@ describe("nextStepFor", () => {
       meetings: [{ id: "m2", date: "2026-08-20", startTime: "20:00", status: "scheduled" }],
       today,
     });
-    expect(step).toEqual({ kind: "done", nextMeeting: { id: "m2", date: "2026-08-20", startTime: "20:00", status: "scheduled" } });
+    expect(step).toEqual({
+      kind: "done",
+      nextMeeting: { id: "m2", date: "2026-08-20", startTime: "20:00", status: "scheduled" },
+    });
   });
 
   it("kind=done без практик вовсе", () => {

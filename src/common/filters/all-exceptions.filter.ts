@@ -41,7 +41,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error = HttpStatus[status] ?? error;
     }
 
-    const requestId = (request.headers["x-request-id"] as string) ?? (request as unknown as { id?: string }).id;
+    const requestId =
+      (request.headers["x-request-id"] as string) ?? (request as unknown as { id?: string }).id;
 
     response.status(status).json({
       statusCode: status,

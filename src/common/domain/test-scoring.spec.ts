@@ -1,7 +1,13 @@
 import { scoreAttempt } from "./test-scoring";
 
 const questions = [
-  { id: "q1", options: [{ id: "o1", isCorrect: true }, { id: "o2", isCorrect: false }] },
+  {
+    id: "q1",
+    options: [
+      { id: "o1", isCorrect: true },
+      { id: "o2", isCorrect: false },
+    ],
+  },
   {
     id: "q2",
     options: [

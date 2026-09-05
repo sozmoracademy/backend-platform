@@ -1,4 +1,12 @@
-import { daysLeft, weekRange, shiftWeek, weekdayShort, weekdayFull, formatDuration, todayInTz } from "./dates";
+import {
+  daysLeft,
+  weekRange,
+  shiftWeek,
+  weekdayShort,
+  weekdayFull,
+  formatDuration,
+  todayInTz,
+} from "./dates";
 
 describe("dates", () => {
   it("daysLeft: положительная, отрицательная и нулевая разница", () => {

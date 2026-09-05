@@ -21,7 +21,10 @@ export interface NextStepMeeting {
   status: "scheduled" | "completed" | "cancelled";
 }
 
-export type NextStep<TLesson extends NextStepLesson = NextStepLesson, TMeeting extends NextStepMeeting = NextStepMeeting> =
+export type NextStep<
+  TLesson extends NextStepLesson = NextStepLesson,
+  TMeeting extends NextStepMeeting = NextStepMeeting,
+> =
   | { kind: "lesson"; lesson: TLesson }
   | { kind: "test"; lesson: TLesson; test: { questionCount: number; minutes: number } }
   | { kind: "practice"; meeting: TMeeting }
@@ -32,7 +35,12 @@ export type NextStep<TLesson extends NextStepLesson = NextStepLesson, TMeeting e
  * открытый урок → первый доступный/непройденный/начатый тест среди завершённых
  * уроков → практика сегодня → «done» (+ ближайшая практика).
  */
-export function nextStepFor<TLesson extends NextStepLesson, TTest extends NextStepTest, TAttempt extends AttemptLike & { lessonOrder: number }, TMeeting extends NextStepMeeting>(params: {
+export function nextStepFor<
+  TLesson extends NextStepLesson,
+  TTest extends NextStepTest,
+  TAttempt extends AttemptLike & { lessonOrder: number },
+  TMeeting extends NextStepMeeting,
+>(params: {
   openedUpTo: number;
   completedOrders: ReadonlySet<number>;
   lessons: TLesson[];

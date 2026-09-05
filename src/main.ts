@@ -43,7 +43,7 @@ async function bootstrap() {
 
   const port = config.get<number>("port") ?? 3000;
   await app.listen(port);
-  // eslint-disable-next-line no-console
+
   console.log(`Sozmor backend запущен на :${port}`);
 }
 

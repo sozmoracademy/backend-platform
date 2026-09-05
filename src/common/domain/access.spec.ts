@@ -2,7 +2,9 @@ import { effectiveAccessStatus } from "./access";
 
 describe("effectiveAccessStatus", () => {
   it("disabled побеждает всё остальное", () => {
-    expect(effectiveAccessStatus({ status: "disabled", endDate: "2030-01-01" }, "2026-08-18")).toBe("disabled");
+    expect(effectiveAccessStatus({ status: "disabled", endDate: "2030-01-01" }, "2026-08-18")).toBe(
+      "disabled",
+    );
   });
 
   it("expired, если endDate < today, даже при status=active", () => {

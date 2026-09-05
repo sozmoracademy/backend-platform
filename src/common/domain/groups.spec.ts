@@ -26,9 +26,33 @@ describe("teacherGroupConflict", () => {
 
 describe("findMatchingGroup", () => {
   const groups = [
-    { id: "g1", language: "en", status: "recruiting" as const, startDate: "2026-09-07", practiceStart: "20:00", studentCount: 10, maxStudents: 50 },
-    { id: "g2", language: "en", status: "recruiting" as const, startDate: "2026-09-01", practiceStart: "20:00", studentCount: 50, maxStudents: 50 },
-    { id: "g3", language: "ru", status: "recruiting" as const, startDate: "2026-09-01", practiceStart: "20:00", studentCount: 0, maxStudents: 50 },
+    {
+      id: "g1",
+      language: "en",
+      status: "recruiting" as const,
+      startDate: "2026-09-07",
+      practiceStart: "20:00",
+      studentCount: 10,
+      maxStudents: 50,
+    },
+    {
+      id: "g2",
+      language: "en",
+      status: "recruiting" as const,
+      startDate: "2026-09-01",
+      practiceStart: "20:00",
+      studentCount: 50,
+      maxStudents: 50,
+    },
+    {
+      id: "g3",
+      language: "ru",
+      status: "recruiting" as const,
+      startDate: "2026-09-01",
+      practiceStart: "20:00",
+      studentCount: 0,
+      maxStudents: 50,
+    },
   ];
 
   it("выбирает первую по дате старта подходящую группу без переполнения", () => {

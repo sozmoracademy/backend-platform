@@ -1,7 +1,15 @@
 import { levelForLesson, monthOfLesson, type CefrLevel, type LevelPlanEntry } from "./program";
 
 export type WeekRhythmKind = "theory" | "practice" | "rest";
-export const WEEK_RHYTHM: readonly WeekRhythmKind[] = ["theory", "practice", "theory", "practice", "theory", "practice", "rest"];
+export const WEEK_RHYTHM: readonly WeekRhythmKind[] = [
+  "theory",
+  "practice",
+  "theory",
+  "practice",
+  "theory",
+  "practice",
+  "rest",
+];
 
 export interface ConflictGroup {
   id: string;
@@ -71,7 +79,10 @@ export function groupStage(currentLesson: number, levelPlan: LevelPlanEntry[], l
 }
 
 /** Расписание группы на неделю — ритм теория/практика/выходной наложенный на слот практики. */
-export function groupWeekSchedule(practiceStart: string, practiceEnd: string): { day: string; kind: WeekRhythmKind; time: string }[] {
+export function groupWeekSchedule(
+  practiceStart: string,
+  practiceEnd: string,
+): { day: string; kind: WeekRhythmKind; time: string }[] {
   const days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
   return days.map((day, i) => ({
     day,

@@ -31,7 +31,8 @@ export function scoreAttempt(
       .map((o) => o.id)
       .sort();
     const givenIds = [...(answers[q.id] ?? [])].sort();
-    const isCorrect = correctIds.length === givenIds.length && correctIds.every((id, i) => id === givenIds[i]);
+    const isCorrect =
+      correctIds.length === givenIds.length && correctIds.every((id, i) => id === givenIds[i]);
     return sum + (isCorrect ? 1 : 0);
   }, 0);
   const total = questions.length;

@@ -10,7 +10,9 @@ export interface AttemptLike {
 
 /** Активная (не просроченная, `in_progress`) попытка — porта `activeAttempt` из `store.tsx`. */
 export function activeAttemptOf<T extends AttemptLike>(attempts: T[], now: string): T | undefined {
-  return attempts.find((a) => a.status === "in_progress" && new Date(a.expiresAt).getTime() > new Date(now).getTime());
+  return attempts.find(
+    (a) => a.status === "in_progress" && new Date(a.expiresAt).getTime() > new Date(now).getTime(),
+  );
 }
 
 /** Лучшая по `score` завершённая попытка — порт `bestAttempt` из `store.tsx`. */

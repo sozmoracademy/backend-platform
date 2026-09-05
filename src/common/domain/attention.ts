@@ -28,7 +28,9 @@ const ENDING_SOON_DAYS = 21;
 
 /** Ученики с активным доступом, не заходившие `IDLE_DAYS`+ дней. */
 export function idleActiveStudents<T extends AttentionStudent>(students: T[], today: string): T[] {
-  return students.filter((s) => effectiveAccessStatus(s, today) === "active" && -daysLeft(s.lastActivity, today) >= IDLE_DAYS);
+  return students.filter(
+    (s) => effectiveAccessStatus(s, today) === "active" && -daysLeft(s.lastActivity, today) >= IDLE_DAYS,
+  );
 }
 
 /** Порт `attentionBuckets` из `store.tsx` — куратор-дашборд, «Требует внимания» (BACKEND.md §6). */
@@ -44,6 +46,11 @@ export function attentionBuckets<TStudent extends AttentionStudent, TGroup exten
     groupsNoTeacher: groups.filter((g) => !g.teacherId && isLive(g)),
     groupsNoLink: groups.filter((g) => !g.meetUrl && isLive(g)),
     notOnboarded: activeStudents.filter((s) => !s.onboarded),
-    groupsEndingSoon: groups.filter((g) => g.status === "active" && daysLeft(g.endDate, today) >= 0 && daysLeft(g.endDate, today) <= ENDING_SOON_DAYS),
+    groupsEndingSoon: groups.filter(
+      (g) =>
+        g.status === "active" &&
+        daysLeft(g.endDate, today) >= 0 &&
+        daysLeft(g.endDate, today) <= ENDING_SOON_DAYS,
+    ),
   };
 }

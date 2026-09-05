@@ -5,7 +5,11 @@ export type LessonState = "locked" | "available" | "completed";
  * `completed`, если урок в `completedOrders`; `available`, если `order <= openedUpTo`;
  * иначе `locked`.
  */
-export function lessonState(openedUpTo: number, completedOrders: ReadonlySet<number>, order: number): LessonState {
+export function lessonState(
+  openedUpTo: number,
+  completedOrders: ReadonlySet<number>,
+  order: number,
+): LessonState {
   if (completedOrders.has(order)) return "completed";
   if (order <= openedUpTo) return "available";
   return "locked";

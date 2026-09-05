@@ -16,12 +16,16 @@ describe("testAvailability", () => {
   });
 
   it("in_progress, если есть активная (не просроченная) попытка", () => {
-    const attempts = [{ status: "in_progress" as const, expiresAt: "2026-08-18T13:00:00.000Z", score: null, passed: null }];
+    const attempts = [
+      { status: "in_progress" as const, expiresAt: "2026-08-18T13:00:00.000Z", score: null, passed: null },
+    ];
     expect(testAvailability("published", true, attempts, NOW)).toBe("in_progress");
   });
 
   it("просроченная in_progress попытка не считается активной", () => {
-    const attempts = [{ status: "in_progress" as const, expiresAt: "2026-08-18T11:00:00.000Z", score: null, passed: null }];
+    const attempts = [
+      { status: "in_progress" as const, expiresAt: "2026-08-18T11:00:00.000Z", score: null, passed: null },
+    ];
     expect(testAvailability("published", true, attempts, NOW)).toBe("available");
   });
 
@@ -41,7 +45,9 @@ describe("testAvailability", () => {
   });
 
   it("activeAttemptOf игнорирует submitted попытки", () => {
-    const attempts = [{ status: "submitted" as const, expiresAt: "2026-08-18T13:00:00.000Z", score: 80, passed: true }];
+    const attempts = [
+      { status: "submitted" as const, expiresAt: "2026-08-18T13:00:00.000Z", score: 80, passed: true },
+    ];
     expect(activeAttemptOf(attempts, NOW)).toBeUndefined();
   });
 });

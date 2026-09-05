@@ -9,7 +9,9 @@ export interface CurrentUserPayload {
 }
 
 /** `@CurrentUser()` — читает `req.user`, положенный `JwtAuthGuard` (BACKEND.md §5.3). */
-export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): CurrentUserPayload => {
-  const request = ctx.switchToHttp().getRequest();
-  return request.user as CurrentUserPayload;
-});
+export const CurrentUser = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): CurrentUserPayload => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user as CurrentUserPayload;
+  },
+);

@@ -7,18 +7,27 @@ import { PrismaModule } from "./infra/prisma/prisma.module";
 import { AllExceptionsFilter } from "./common/filters/all-exceptions.filter";
 import { PrismaExceptionFilter } from "./common/filters/prisma-exception.filter";
 import { HealthModule } from "./modules/health/health.module";
+import { UsersModule } from "./modules/users/users.module";
+import { AuthModule } from "./modules/auth/auth.module";
 
 @Module({
   imports: [
     ConfigModule,
     PrismaModule,
-    ThrottlerModule.forRoot([
-      {
-        ttl: Number(process.env.THROTTLE_TTL ?? 300) * 1000,
-        limit: Number(process.env.THROTTLE_LIMIT ?? 100),
-      },
-    ]),
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: Number(process.env.THROTTLE_TTL ?? 300) * 1000,
+          limit: Number(process.env.THROTTLE_LIMIT ?? 100),
+        },
+      ],
+      // В e2e-тестах много последовательных запросов (в т.ч. login) от одного IP —
+      // рейт-лимит там не тестируем отдельным сценарием, поэтому отключаем шумовой 429.
+      skipIf: () => process.env.NODE_ENV === "test",
+    }),
     HealthModule,
+    UsersModule,
+    AuthModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

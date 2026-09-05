@@ -4,13 +4,31 @@ const today = "2026-08-18";
 
 const students = [
   { id: "s1", status: "active" as const, endDate: "2026-09-01", lastActivity: "2026-08-10", onboarded: true },
-  { id: "s2", status: "active" as const, endDate: "2026-09-01", lastActivity: "2026-08-18", onboarded: false },
-  { id: "s3", status: "disabled" as const, endDate: "2026-09-01", lastActivity: "2026-08-01", onboarded: true },
+  {
+    id: "s2",
+    status: "active" as const,
+    endDate: "2026-09-01",
+    lastActivity: "2026-08-18",
+    onboarded: false,
+  },
+  {
+    id: "s3",
+    status: "disabled" as const,
+    endDate: "2026-09-01",
+    lastActivity: "2026-08-01",
+    onboarded: true,
+  },
 ];
 
 const groups = [
   { id: "g1", teacherId: null, meetUrl: "", status: "active" as const, endDate: "2026-08-30" },
-  { id: "g2", teacherId: "t1", meetUrl: "https://meet", status: "recruiting" as const, endDate: "2027-01-01" },
+  {
+    id: "g2",
+    teacherId: "t1",
+    meetUrl: "https://meet",
+    status: "recruiting" as const,
+    endDate: "2027-01-01",
+  },
 ];
 
 describe("idleActiveStudents", () => {
@@ -30,7 +48,9 @@ describe("attentionBuckets", () => {
   });
 
   it("disabled/expired группы не попадают в noTeacher/noLink", () => {
-    const archived = [{ id: "g3", teacherId: null, meetUrl: "", status: "archived" as const, endDate: "2026-08-30" }];
+    const archived = [
+      { id: "g3", teacherId: null, meetUrl: "", status: "archived" as const, endDate: "2026-08-30" },
+    ];
     const buckets = attentionBuckets(students, archived, today);
     expect(buckets.groupsNoTeacher).toEqual([]);
   });
