@@ -1,0 +1,37 @@
+import type { Env } from "./env.validation";
+
+/** Раскладка `.env` по namespace'ам — `config.get('jwt.accessSecret')`. */
+export default function configuration() {
+  const env = process.env as unknown as Env;
+  return {
+    env: env.NODE_ENV,
+    port: Number(env.PORT ?? 3000),
+    database: {
+      url: env.DATABASE_URL,
+    },
+    jwt: {
+      accessSecret: env.JWT_ACCESS_SECRET,
+      refreshSecret: env.JWT_REFRESH_SECRET,
+      accessTtl: env.ACCESS_TTL ?? "15m",
+      refreshTtl: env.REFRESH_TTL ?? "7d",
+    },
+    cors: {
+      origin: env.CORS_ORIGIN ?? "http://localhost:5173",
+    },
+    cookie: {
+      domain: env.COOKIE_DOMAIN ?? "localhost",
+    },
+    school: {
+      tz: env.SCHOOL_TZ ?? "Asia/Bishkek",
+    },
+    seed: {
+      today: env.SEED_TODAY ?? "2026-08-18",
+    },
+    throttle: {
+      ttl: Number(env.THROTTLE_TTL ?? 300),
+      limit: Number(env.THROTTLE_LIMIT ?? 100),
+    },
+  };
+}
+
+export type AppConfig = ReturnType<typeof configuration>;

@@ -1,0 +1,318 @@
+// Sozmor Academy — Prisma schema. Source of truth: docs/BACKEND.md §4 (перенесено дословно).
+// Единственное дополнение сверх §4 — модель AppSettings (см. §18.x расхождений в отчёте):
+// нужна для `GET/PUT /courses/preview-video` (TЗ §4.3), которого нет в исходном перечне
+// докa BACKEND.md §12, но который уже реализован в MSW фронтенда.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  CURATOR
+}
+
+enum Lang {
+  en
+  ru
+}
+
+enum CourseType {
+  GROUP
+  INDIVIDUAL
+}
+
+enum AccessStatus {
+  active
+  expired
+  disabled
+}
+
+enum GroupStatus {
+  recruiting
+  active
+  finished
+  archived
+}
+
+enum TeacherStatus {
+  active
+  absent
+  replacement
+}
+
+enum MeetingScope {
+  GROUP
+  INDIVIDUAL
+}
+
+enum MeetingStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum TestStatus {
+  draft
+  published
+}
+
+enum QuestionType {
+  single
+  multiple
+}
+
+enum AttemptStatus {
+  in_progress
+  submitted
+}
+
+model User {
+  id           String   @id @default(cuid())
+  login        String   @unique
+  passwordHash String
+  role         Role
+  tokenVersion Int      @default(0)
+  student      Student?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Teacher {
+  id        String        @id @default(cuid())
+  name      String
+  languages Lang[]
+  status    TeacherStatus @default(active)
+  phone     String        @default("")
+  tone      String        @default("var(--tone-3)")
+  groups    Group[]
+  students  Student[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model CourseProduct {
+  id             String     @id @default(cuid())
+  language       Lang
+  format         CourseType
+  title          String
+  durationMonths Int
+  price          Int
+  currency       String     @default("сом")
+  features       String[]
+  levelPlan      Json
+
+  @@unique([language, format])
+}
+
+model CourseBlock {
+  name  String @id
+  title String
+  level String
+  month Int
+}
+
+model Lesson {
+  id          String          @id @default(cuid())
+  order       Int             @unique
+  title       String
+  description String
+  videoUrl    String
+  duration    String
+  block       String
+  test        LessonTest?
+  progress    StudentLesson[]
+  meetings    Meeting[]
+
+  @@index([block])
+}
+
+model Group {
+  id            String      @id @default(cuid())
+  code          String      @unique
+  name          String
+  language      Lang
+  startDate     DateTime    @db.Date
+  endDate       DateTime    @db.Date
+  practiceStart String
+  practiceEnd   String
+  teacher       Teacher?    @relation(fields: [teacherId], references: [id])
+  teacherId     String?
+  maxStudents   Int         @default(50)
+  status        GroupStatus @default(recruiting)
+  currentLesson Int         @default(1)
+  meetUrl       String      @default("")
+  students      Student[]
+  meetings      Meeting[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Student {
+  id           String              @id @default(cuid())
+  user         User                @relation(fields: [userId], references: [id])
+  userId       String              @unique
+  firstName    String
+  lastName     String
+  phone        String              @default("")
+  language     Lang
+  type         CourseType
+  age          Int?
+  city         String              @default("")
+  group        Group?              @relation(fields: [groupId], references: [id])
+  groupId      String?
+  teacher      Teacher?            @relation(fields: [teacherId], references: [id])
+  teacherId    String?
+  startDate    DateTime            @db.Date
+  endDate      DateTime            @db.Date
+  status       AccessStatus        @default(active)
+  openedUpTo   Int                 @default(1)
+  onboarded    Boolean             @default(false)
+  managerName  String              @default("—")
+  avatarTone   String              @default("var(--tone-1)")
+  lastActivity DateTime            @db.Date
+  payment      Payment?
+  lessons      StudentLesson[]
+  attempts     TestAttempt[]
+  notes        Note[]
+  attendance   MeetingAttendance[]
+  meetings     Meeting[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([groupId])
+  @@index([teacherId])
+  @@index([status])
+  @@index([language, type])
+}
+
+model StudentLesson {
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  lesson      Lesson    @relation(fields: [lessonOrder], references: [order])
+  lessonOrder Int
+  watchedPct  Int       @default(0)
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@id([studentId, lessonOrder])
+}
+
+model Payment {
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId    String   @id
+  totalCost    Int
+  paid         Int      @default(0)
+  purchaseDate DateTime @db.Date
+  updatedAt    DateTime @updatedAt
+}
+
+model Meeting {
+  id          String              @id @default(cuid())
+  lesson      Lesson              @relation(fields: [lessonOrder], references: [order])
+  lessonOrder Int
+  scope       MeetingScope
+  group       Group?              @relation(fields: [groupId], references: [id])
+  groupId     String?
+  student     Student?            @relation(fields: [studentId], references: [id])
+  studentId   String?
+  title       String
+  date        DateTime            @db.Date
+  startTime   String
+  endTime     String
+  meetUrl     String              @default("")
+  status      MeetingStatus       @default(scheduled)
+  attendance  MeetingAttendance[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([date])
+  @@index([groupId])
+  @@index([studentId])
+}
+
+model MeetingAttendance {
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meetingId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  @@id([meetingId, studentId])
+}
+
+model LessonTest {
+  id           String         @id @default(cuid())
+  lesson       Lesson         @relation(fields: [lessonOrder], references: [order])
+  lessonOrder  Int            @unique
+  title        String
+  timeLimitSec Int            @default(300)
+  passingScore Int            @default(70)
+  status       TestStatus     @default(draft)
+  questions    TestQuestion[]
+  attempts     TestAttempt[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model TestQuestion {
+  id      String           @id @default(cuid())
+  test    LessonTest       @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testId  String
+  text    String           @default("")
+  type    QuestionType     @default(single)
+  order   Int
+  options QuestionOption[]
+}
+
+model QuestionOption {
+  id         String       @id @default(cuid())
+  question   TestQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId String
+  text       String       @default("")
+  isCorrect  Boolean      @default(false)
+}
+
+model TestAttempt {
+  id             String        @id @default(cuid())
+  test           LessonTest    @relation(fields: [testId], references: [id])
+  testId         String
+  lessonOrder    Int
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId      String
+  startedAt      DateTime      @default(now())
+  expiresAt      DateTime
+  submittedAt    DateTime?
+  answers        Json          @default("{}")
+  correctCount   Int?
+  totalQuestions Int
+  score          Int?
+  passed         Boolean?
+  status         AttemptStatus @default(in_progress)
+
+  @@index([studentId, testId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  authorId  String
+  author    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+}
+
+/// Не описана в BACKEND.md §4 — singleton-настройки платформы. Пока единственное
+/// поле — «тестовое видео» (TЗ §4.3): временно подменяет videoUrl всех уроков.
+model AppSettings {
+  id              String  @id @default("singleton")
+  previewVideoUrl String?
+}
