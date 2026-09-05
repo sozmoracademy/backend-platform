@@ -13,6 +13,11 @@ import { CoursesModule } from "./modules/courses/courses.module";
 import { LessonsModule } from "./modules/lessons/lessons.module";
 import { StudentCabinetModule } from "./modules/student-cabinet/student-cabinet.module";
 import { TestsModule } from "./modules/tests/tests.module";
+import { StudentsModule } from "./modules/students/students.module";
+import { GroupsModule } from "./modules/groups/groups.module";
+import { ProgressModule } from "./modules/progress/progress.module";
+import { NotesModule } from "./modules/notes/notes.module";
+import { DashboardModule } from "./modules/dashboard/dashboard.module";
 
 @Module({
   imports: [
@@ -36,6 +41,11 @@ import { TestsModule } from "./modules/tests/tests.module";
     LessonsModule,
     StudentCabinetModule,
     TestsModule,
+    StudentsModule,
+    GroupsModule,
+    ProgressModule,
+    NotesModule,
+    DashboardModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

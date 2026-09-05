@@ -78,6 +78,37 @@ export function groupStage(currentLesson: number, levelPlan: LevelPlanEntry[], l
   };
 }
 
+/** «EN» / «RU» — префикс кода потока (TЗ §8.4). */
+export function groupCodePrefix(language: "en" | "ru"): "EN" | "RU" {
+  return language === "en" ? "EN" : "RU";
+}
+
+/** Следующий свободный код потока для языка: EN-01, EN-02, … (BACKEND.md §12, `POST /groups`). */
+export function nextGroupCode(existingCodes: string[], language: "en" | "ru"): string {
+  const prefix = groupCodePrefix(language);
+  const used = existingCodes
+    .filter((c) => c.startsWith(`${prefix}-`))
+    .map((c) => Number(c.split("-")[1]) || 0);
+  const n = (used.length ? Math.max(...used) : 0) + 1;
+  return `${prefix}-${String(n).padStart(2, "0")}`;
+}
+
+function languageNameRu(language: "en" | "ru"): string {
+  return language === "en" ? "Английский язык" : "Русский язык";
+}
+
+/** «EN-02 · Английский язык · 07.09.2026 · 20:00» (TЗ §8.4). */
+export function groupNameFor(
+  code: string,
+  language: "en" | "ru",
+  startDate: string,
+  practiceStart: string,
+): string {
+  const d = new Date(`${startDate}T00:00:00Z`);
+  const label = `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}.${d.getUTCFullYear()}`;
+  return `${code} · ${languageNameRu(language)} · ${label} · ${practiceStart}`;
+}
+
 /** Расписание группы на неделю — ритм теория/практика/выходной наложенный на слот практики. */
 export function groupWeekSchedule(
   practiceStart: string,

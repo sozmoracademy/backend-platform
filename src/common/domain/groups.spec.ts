@@ -1,4 +1,4 @@
-import { teacherGroupConflict, findMatchingGroup, groupStage } from "./groups";
+import { teacherGroupConflict, findMatchingGroup, groupStage, nextGroupCode, groupNameFor } from "./groups";
 
 describe("teacherGroupConflict", () => {
   const groups = [
@@ -72,5 +72,25 @@ describe("groupStage", () => {
   it("месяц/уровень по currentLesson группы", () => {
     const levelPlan = [{ month: 1, level: "A1" as const }];
     expect(groupStage(4, levelPlan)).toEqual({ month: 1, level: "A1", lesson: 4 });
+  });
+});
+
+describe("nextGroupCode", () => {
+  it("первый код потока — 01", () => {
+    expect(nextGroupCode([], "en")).toBe("EN-01");
+  });
+  it("следующий свободный номер по языку", () => {
+    expect(nextGroupCode(["EN-01", "EN-02", "RU-01"], "en")).toBe("EN-03");
+  });
+  it("коды другого языка не влияют на нумерацию", () => {
+    expect(nextGroupCode(["RU-01", "RU-02"], "en")).toBe("EN-01");
+  });
+});
+
+describe("groupNameFor", () => {
+  it("формирует «код · язык · дата · время»", () => {
+    expect(groupNameFor("EN-02", "en", "2026-09-07", "20:00")).toBe(
+      "EN-02 · Английский язык · 07.09.2026 · 20:00",
+    );
   });
 });
