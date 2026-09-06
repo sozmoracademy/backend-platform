@@ -3,22 +3,27 @@
 // `db push`, `db execute`, `introspect`) задаём здесь; рантайм-клиент получает
 // её через driver adapter (см. src/infra/prisma/prisma.service.ts).
 //
+// Осознанно без импорта из `prisma/config` (`defineConfig`/`env` — лишь
+// type-хелперы): этот файл копируется в рантайм-образ Docker, где сам пакет
+// `prisma` может отсутствовать после `npm ci --omit=dev`. Единственная внешняя
+// зависимость — `dotenv` (prod, тянется через @nestjs/config).
+//
 // `.env` грузим сами. `dotenv` НЕ переопределяет уже выставленные переменные,
 // поэтому e2e-прогон (test/global-setup.js прокидывает DATABASE_URL от .env.test
-// в дочерний процесс `prisma migrate deploy`) продолжает работать с тестовой БД.
+// в дочерний процесс `prisma migrate deploy`) и прод (Railway задаёт DATABASE_URL
+// в окружении) продолжают работать.
 import { join } from "node:path";
 
 import { config as loadEnv } from "dotenv";
-import { defineConfig, env } from "prisma/config";
 
 loadEnv({ path: join(__dirname, ".env") });
 
-export default defineConfig({
+export default {
   schema: join("prisma", "schema.prisma"),
   migrations: {
     path: join("prisma", "migrations"),
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    url: process.env.DATABASE_URL,
   },
-});
+};
