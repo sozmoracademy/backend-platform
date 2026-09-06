@@ -25,7 +25,7 @@ describe("tusUploadSignature", () => {
 });
 
 describe("signedPlaylistUrl", () => {
-  it("строит URL с token / expires / token_path", () => {
+  it("строит directory-token URL в формате пути (bcdn_token в префиксе)", () => {
     const url = signedPlaylistUrl(
       { cdnHostname: "vz-x.b-cdn.net", tokenKey: "tk", videoId: "abc" },
       21600,
@@ -38,8 +38,8 @@ describe("signedPlaylistUrl", () => {
       .digest("base64");
     const token = rawToken.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
     expect(url).toBe(
-      `https://vz-x.b-cdn.net/abc/playlist.m3u8?token=${token}&expires=${expires}` +
-        `&token_path=${encodeURIComponent("/abc/")}`,
+      `https://vz-x.b-cdn.net/bcdn_token=${token}&expires=${expires}` +
+        `&token_path=${encodeURIComponent("/abc/")}/abc/playlist.m3u8`,
     );
   });
 
@@ -54,9 +54,8 @@ describe("signedPlaylistUrl", () => {
       0,
       1788757772_000,
     );
-    expect(new URL(url).searchParams.get("token")).toBe(
-      "YUmnwRjp816AEGsk86vTI5JlW4ZOAPYDZgmZJIq7Pmo",
-    );
+    expect(url).toContain("bcdn_token=YUmnwRjp816AEGsk86vTI5JlW4ZOAPYDZgmZJIq7Pmo&");
+    expect(url.endsWith("/e26654db-6485-459b-8d4c-c1c1a0fdbc2b/playlist.m3u8")).toBe(true);
   });
 
   it("token base64url-безопасен (без + / =)", () => {
@@ -65,13 +64,13 @@ describe("signedPlaylistUrl", () => {
       60,
       NOW,
     );
-    const token = new URL(url).searchParams.get("token")!;
+    const token = url.match(/bcdn_token=([^&]+)&/)![1];
     expect(token).not.toMatch(/[+/=]/);
   });
 
   it("через playbackTtl секунд ссылка «протухает» — expires в прошлом при следующей проверке", () => {
     const url = signedPlaylistUrl({ cdnHostname: "h", tokenKey: "tk", videoId: "v" }, 6 * 3600, NOW);
-    const expires = Number(new URL(url).searchParams.get("expires"));
+    const expires = Number(url.match(/&expires=(\d+)&/)![1]);
     expect(expires * 1000).toBeGreaterThan(NOW);
     expect(expires * 1000).toBeLessThan(NOW + 7 * 3600 * 1000);
   });

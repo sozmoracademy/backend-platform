@@ -42,17 +42,20 @@ function base64Url(buf: Buffer): string {
 }
 
 /**
- * Подписанный HLS-URL для Bunny Stream (directory-token, v1-алгоритм CDN Token
- * Authentication). Хэшируется `tokenKey + token_path + expires + "token_path=" +
- * token_path` (последний блок — это отсортированный `parameter_data`, где
- * единственный параметр — сам `token_path` с НЕ-URL-кодированным значением);
- * результат — base64url(sha256). Проверено против токена, который генерит
- * встроенный плеер Bunny (iframe.mediadelivery.net) — совпадает байт в байт.
+ * Подписанный HLS-URL для Bunny Stream — directory-token в ФОРМАТЕ ПУТИ:
  *
- * `token_path=/<videoId>/` авторизует одним токеном и `playlist.m3u8`, и вложенные
- * `<res>/video.m3u8`, и все `.ts`-сегменты. Клиент (hls.js) обязан дописывать тот
- * же query-string ко всем дочерним запросам — см. shared/ui/video-player.tsx.
- * Ссылка живёт `ttlSec` секунд.
+ *   https://<host>/bcdn_token=<token>&expires=<e>&token_path=<enc(tp)>/<videoId>/playlist.m3u8
+ *
+ * Токен (v1-алгоритм CDN Token Authentication): `base64url(sha256(tokenKey +
+ * token_path + expires + "token_path=" + token_path))`, где последний блок —
+ * отсортированный `parameter_data` с НЕ-URL-кодированным значением. Сверено байт
+ * в байт с токеном встроенного плеера Bunny (iframe.mediadelivery.net).
+ *
+ * Почему префикс в пути, а не `?token=...`: hls.js (и нативный HLS в Safari)
+ * резолвят относительные ссылки на `<res>/video.m3u8` и `.ts` через
+ * `new URL(rel, base)` — сегмент пути `bcdn_token=.../` при этом сохраняется
+ * автоматически, поэтому один токен покрывает все дочерние запросы БЕЗ кастомного
+ * лоадера. `token_path=/<videoId>/` задаёт зону действия токена. Живёт `ttlSec` с.
  */
 export function signedPlaylistUrl(
   params: { cdnHostname: string; tokenKey: string; videoId: string },
@@ -66,10 +69,8 @@ export function signedPlaylistUrl(
       .update(`${params.tokenKey}${tokenPath}${expires}token_path=${tokenPath}`)
       .digest(),
   );
-  return (
-    `https://${params.cdnHostname}/${params.videoId}/playlist.m3u8` +
-    `?token=${token}&expires=${expires}&token_path=${encodeURIComponent(tokenPath)}`
-  );
+  const prefix = `bcdn_token=${token}&expires=${expires}&token_path=${encodeURIComponent(tokenPath)}`;
+  return `https://${params.cdnHostname}/${prefix}/${params.videoId}/playlist.m3u8`;
 }
 
 export type VideoStatusValue = "none" | "processing" | "ready" | "failed";
