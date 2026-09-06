@@ -42,9 +42,17 @@ function base64Url(buf: Buffer): string {
 }
 
 /**
- * Подписанный HLS-URL: `token = base64url(sha256(tokenKey + token_path + expires))`.
- * `token_path=/<videoId>/` авторизует и `playlist.m3u8`, и все `.ts`-сегменты под
- * ним одним токеном. Ссылка живёт `ttlSec` секунд — переслать её нельзя.
+ * Подписанный HLS-URL для Bunny Stream (directory-token, v1-алгоритм CDN Token
+ * Authentication). Хэшируется `tokenKey + token_path + expires + "token_path=" +
+ * token_path` (последний блок — это отсортированный `parameter_data`, где
+ * единственный параметр — сам `token_path` с НЕ-URL-кодированным значением);
+ * результат — base64url(sha256). Проверено против токена, который генерит
+ * встроенный плеер Bunny (iframe.mediadelivery.net) — совпадает байт в байт.
+ *
+ * `token_path=/<videoId>/` авторизует одним токеном и `playlist.m3u8`, и вложенные
+ * `<res>/video.m3u8`, и все `.ts`-сегменты. Клиент (hls.js) обязан дописывать тот
+ * же query-string ко всем дочерним запросам — см. shared/ui/video-player.tsx.
+ * Ссылка живёт `ttlSec` секунд.
  */
 export function signedPlaylistUrl(
   params: { cdnHostname: string; tokenKey: string; videoId: string },
@@ -54,7 +62,9 @@ export function signedPlaylistUrl(
   const expires = Math.floor(now / 1000) + ttlSec;
   const tokenPath = `/${params.videoId}/`;
   const token = base64Url(
-    createHash("sha256").update(`${params.tokenKey}${tokenPath}${expires}`).digest(),
+    createHash("sha256")
+      .update(`${params.tokenKey}${tokenPath}${expires}token_path=${tokenPath}`)
+      .digest(),
   );
   return (
     `https://${params.cdnHostname}/${params.videoId}/playlist.m3u8` +

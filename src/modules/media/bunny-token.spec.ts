@@ -32,11 +32,30 @@ describe("signedPlaylistUrl", () => {
       NOW,
     );
     const expires = Math.floor(NOW / 1000) + 21600;
-    const rawToken = createHash("sha256").update(`tk/abc/${expires}`).digest("base64");
+    // Bunny v1 directory-token: sha256(key + token_path + expires + "token_path=" + token_path)
+    const rawToken = createHash("sha256")
+      .update(`tk/abc/${expires}token_path=/abc/`)
+      .digest("base64");
     const token = rawToken.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
     expect(url).toBe(
       `https://vz-x.b-cdn.net/abc/playlist.m3u8?token=${token}&expires=${expires}` +
         `&token_path=${encodeURIComponent("/abc/")}`,
+    );
+  });
+
+  it("совпадает с токеном, который сгенерил встроенный плеер Bunny", () => {
+    // Зафиксированный реальный вектор: videoId + expires + token из iframe.mediadelivery.net.
+    const url = signedPlaylistUrl(
+      {
+        cdnHostname: "vz-b34b5ad0-adc.b-cdn.net",
+        tokenKey: "7e5d05a8-cea9-4140-9cb2-26930c6d50f3",
+        videoId: "e26654db-6485-459b-8d4c-c1c1a0fdbc2b",
+      },
+      0,
+      1788757772_000,
+    );
+    expect(new URL(url).searchParams.get("token")).toBe(
+      "YUmnwRjp816AEGsk86vTI5JlW4ZOAPYDZgmZJIq7Pmo",
     );
   });
 
