@@ -16,7 +16,12 @@ export default function configuration() {
       refreshTtl: env.REFRESH_TTL ?? "7d",
     },
     cors: {
-      origin: env.CORS_ORIGIN ?? "http://localhost:5173",
+      // CORS_ORIGIN — один origin или список через запятую (dev: Vite может уйти
+      // с 5173 на 5174, если порт занят). Пустой список → дефолт.
+      origin: (env.CORS_ORIGIN ?? "http://localhost:5173,http://localhost:5174")
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean),
     },
     cookie: {
       domain: env.COOKIE_DOMAIN ?? "localhost",
