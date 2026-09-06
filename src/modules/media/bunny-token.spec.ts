@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import { mapWebhookStatus, signedPlaylistUrl, tusUploadSignature } from "./bunny-token";
+import {
+  bucketedExpires,
+  mapWebhookStatus,
+  signedPlaylistUrl,
+  tusUploadSignature,
+} from "./bunny-token";
 import { parseBunnyWebhook } from "./dto/bunny-webhook.dto";
 
 const NOW = 1_700_000_000_000; // фиксированное «сейчас» в мс
@@ -31,7 +36,7 @@ describe("signedPlaylistUrl", () => {
       21600,
       NOW,
     );
-    const expires = Math.floor(NOW / 1000) + 21600;
+    const expires = bucketedExpires(21600, NOW);
     // Bunny v1 directory-token: sha256(key + token_path + expires + "token_path=" + token_path)
     const rawToken = createHash("sha256")
       .update(`tk/abc/${expires}token_path=/abc/`)
@@ -41,6 +46,20 @@ describe("signedPlaylistUrl", () => {
       `https://vz-x.b-cdn.net/bcdn_token=${token}&expires=${expires}` +
         `&token_path=${encodeURIComponent("/abc/")}/abc/playlist.m3u8`,
     );
+  });
+
+  it("URL стабилен при рефетчах внутри окна ttl (bucketedExpires)", () => {
+    const p = { cdnHostname: "h", tokenKey: "tk", videoId: "v" };
+    const ttl = 21600;
+    const a = signedPlaylistUrl(p, ttl, NOW);
+    const b = signedPlaylistUrl(p, ttl, NOW + 5 * 60_000); // +5 мин — тот же bucket
+    const c = signedPlaylistUrl(p, ttl, NOW + 2 * ttl * 1000); // через 2 окна — другой
+    expect(b).toBe(a);
+    expect(c).not.toBe(a);
+    // expires всегда в будущем: ttl..2·ttl вперёд
+    const exp = bucketedExpires(ttl, NOW);
+    expect(exp - Math.floor(NOW / 1000)).toBeGreaterThanOrEqual(ttl);
+    expect(exp - Math.floor(NOW / 1000)).toBeLessThanOrEqual(2 * ttl);
   });
 
   it("совпадает с токеном, который сгенерил встроенный плеер Bunny", () => {
@@ -68,11 +87,12 @@ describe("signedPlaylistUrl", () => {
     expect(token).not.toMatch(/[+/=]/);
   });
 
-  it("через playbackTtl секунд ссылка «протухает» — expires в прошлом при следующей проверке", () => {
-    const url = signedPlaylistUrl({ cdnHostname: "h", tokenKey: "tk", videoId: "v" }, 6 * 3600, NOW);
+  it("expires в будущем и не дальше 2·ttl", () => {
+    const ttl = 6 * 3600;
+    const url = signedPlaylistUrl({ cdnHostname: "h", tokenKey: "tk", videoId: "v" }, ttl, NOW);
     const expires = Number(url.match(/&expires=(\d+)&/)![1]);
     expect(expires * 1000).toBeGreaterThan(NOW);
-    expect(expires * 1000).toBeLessThan(NOW + 7 * 3600 * 1000);
+    expect(expires * 1000).toBeLessThanOrEqual(NOW + 2 * ttl * 1000);
   });
 });
 
