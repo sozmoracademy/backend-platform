@@ -71,6 +71,16 @@ enum AttemptStatus {
   submitted
 }
 
+/// Состояние видео урока в Bunny Stream: none — видео не заливали (играет
+/// `videoUrl`-fallback); processing — файл принят, Bunny перекодирует;
+/// ready — HLS готов, отдаём подписанный CDN-URL; failed — перекодирование упало.
+enum VideoStatus {
+  none
+  processing
+  ready
+  failed
+}
+
 model User {
   id           String   @id @default(cuid())
   login        String   @unique
@@ -128,7 +138,16 @@ model Lesson {
   order           Int
   title           String
   description     String
+  /// Fallback-источник видео: внешняя ссылка (YouTube / готовый mp4) или
+  /// placeholder из сида. Используется, пока для урока не залито видео в Bunny.
   videoUrl        String
+  /// GUID видео в библиотеке Bunny Stream. Пишется при запросе загрузки —
+  /// до того, как файл реально залит, чтобы webhook (приходит с VideoGuid)
+  /// нашёл урок и чтобы связь урок↔видео пережила закрытие вкладки.
+  videoAssetId     String?
+  videoStatus      VideoStatus   @default(none)
+  /// Длительность залитого видео в секундах — приходит из Bunny в webhook.
+  videoDurationSec Int?
   duration        String
   block           String
   test            LessonTest?
@@ -138,6 +157,7 @@ model Lesson {
 
   @@unique([courseProductId, order])
   @@index([block])
+  @@index([videoAssetId])
 }
 
 model Group {

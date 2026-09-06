@@ -20,6 +20,16 @@ export const envSchema = z.object({
 
   THROTTLE_TTL: z.coerce.number().int().positive().default(300),
   THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
+
+  // Bunny Stream — хостинг/перекодирование/CDN видеоуроков (docs/TЗ.md §15 п.7).
+  // Файл льётся из браузера напрямую в Bunny по TUS; бэкенд только подписывает
+  // запрос на загрузку и HLS-URL воспроизведения. API-ключ на фронт не попадает.
+  BUNNY_STREAM_LIBRARY_ID: z.coerce.number().int().positive(),
+  BUNNY_STREAM_API_KEY: z.string().min(1),
+  BUNNY_STREAM_CDN_HOSTNAME: z.string().min(1),
+  BUNNY_STREAM_TOKEN_KEY: z.string().min(1),
+  BUNNY_WEBHOOK_KEY: z.string().min(1),
+  BUNNY_PLAYBACK_TTL: z.coerce.number().int().positive().default(21600),
 });
 
 export type Env = z.infer<typeof envSchema>;

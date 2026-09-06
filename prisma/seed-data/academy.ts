@@ -304,8 +304,8 @@ export const STUDENTS: SeedStudent[] = [...HAND_STUDENTS, ...generateStudents(46
 export const CURATOR = {
   id: "c1",
   login: "curator",
-  password: "test123",
-  name: "Мээрим Абдыраева",
+  password: "curator05",
+  name: "Sozmor Academy",
 };
 
 export interface SeedMeeting {

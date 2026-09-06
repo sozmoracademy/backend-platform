@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import type { VideoStatus } from "@prisma/client";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 
 @Injectable()
@@ -69,7 +70,14 @@ export class LessonsRepository {
   update(
     courseProductId: string,
     order: number,
-    data: { title?: string; description?: string; videoUrl?: string },
+    data: {
+      title?: string;
+      description?: string;
+      videoUrl?: string;
+      videoAssetId?: string | null;
+      videoStatus?: VideoStatus;
+      videoDurationSec?: number | null;
+    },
   ) {
     return this.prisma.lesson.update({ where: { courseProductId_order: { courseProductId, order } }, data });
   }

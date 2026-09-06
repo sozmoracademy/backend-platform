@@ -6,6 +6,7 @@ import { LessonsService } from "./lessons.service";
 import { CreateLessonRequestDto } from "./dto/create-lesson.dto";
 import { LessonCatalogItemDto } from "./dto/lesson-catalog-item.dto";
 import { LessonEditorDto, UpdateLessonRequestDto } from "./dto/lesson-editor.dto";
+import { VideoUploadTicketDto } from "./dto/video-upload-ticket.dto";
 
 /**
  * `courses/products/:productId/lessons` — каталог доступен обеим ролям, редактор
@@ -34,6 +35,13 @@ export class LessonsController {
   @Get(":order")
   editor(@Param() params: ProductOrderParamDto): Promise<LessonEditorDto> {
     return this.lessons.editor(params.productId, params.order);
+  }
+
+  // Разрешение на прямую TUS-заливку видео в Bunny — файл на бэкенд не идёт.
+  @Roles("CURATOR")
+  @Post(":order/video/upload")
+  requestVideoUpload(@Param() params: ProductOrderParamDto): Promise<VideoUploadTicketDto> {
+    return this.lessons.requestVideoUpload(params.productId, params.order);
   }
 
   @Roles("CURATOR")

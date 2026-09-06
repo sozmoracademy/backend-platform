@@ -21,6 +21,7 @@ import { NotesModule } from "./modules/notes/notes.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { TeachersModule } from "./modules/teachers/teachers.module";
 import { MeetingsModule } from "./modules/meetings/meetings.module";
+import { MediaModule } from "./modules/media/media.module";
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { MeetingsModule } from "./modules/meetings/meetings.module";
     DashboardModule,
     TeachersModule,
     MeetingsModule,
+    MediaModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

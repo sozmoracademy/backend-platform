@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/commo
 import { ConfigService } from "@nestjs/config";
 import { StudentCabinetRepository } from "./student-cabinet.repository";
 import { CourseResolverService } from "../courses/course-resolver.service";
+import { BunnyStreamService } from "../media/bunny-stream.service";
 import {
   activityDatesFor,
   bestAttemptOf,
@@ -79,6 +80,7 @@ export class StudentCabinetService {
     private readonly repo: StudentCabinetRepository,
     private readonly config: ConfigService,
     private readonly resolver: CourseResolverService,
+    private readonly bunny: BunnyStreamService,
   ) {}
 
   private today(): string {
@@ -400,7 +402,17 @@ export class StudentCabinetService {
       duration: lesson.duration,
       block: lesson.block,
       state,
-      videoUrl: state === "locked" ? "" : (previewVideoUrl ?? lesson.videoUrl),
+      // Приоритет: нет доступа → ""; тестовое видео куратора (TЗ §4.3) →
+      // оно; залитое и готовое видео → свежий подписанный Bunny-HLS (живёт
+      // ~6 ч, переслать нельзя); иначе → внешняя ссылка / placeholder из сида.
+      videoUrl:
+        state === "locked"
+          ? ""
+          : previewVideoUrl
+            ? previewVideoUrl
+            : lesson.videoAssetId && lesson.videoStatus === "ready"
+              ? this.bunny.signedPlaylistUrl(lesson.videoAssetId)
+              : lesson.videoUrl,
       watchedPct: completedOrders.has(order) ? 100 : (watchedByOrder.get(order) ?? 0),
       ...(prevLesson ? { prev: { order: prevLesson.order, title: prevLesson.title } } : {}),
       ...(nextLesson ? { next: { order: nextLesson.order, title: nextLesson.title } } : {}),

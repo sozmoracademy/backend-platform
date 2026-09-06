@@ -36,6 +36,14 @@ export default function configuration() {
       ttl: Number(env.THROTTLE_TTL ?? 300),
       limit: Number(env.THROTTLE_LIMIT ?? 100),
     },
+    bunny: {
+      libraryId: Number(env.BUNNY_STREAM_LIBRARY_ID),
+      apiKey: env.BUNNY_STREAM_API_KEY,
+      cdnHostname: env.BUNNY_STREAM_CDN_HOSTNAME,
+      tokenKey: env.BUNNY_STREAM_TOKEN_KEY,
+      webhookKey: env.BUNNY_WEBHOOK_KEY,
+      playbackTtl: Number(env.BUNNY_PLAYBACK_TTL ?? 21600),
+    },
   };
 }
 
