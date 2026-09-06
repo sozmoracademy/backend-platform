@@ -27,6 +27,7 @@ import {
   BulkUpdateStudentsRequestDto,
   CreateStudentRequestDto,
   CreateStudentResponseDto,
+  ResetStudentPasswordResponseDto,
   StudentHeaderDto,
   StudentLearningDto,
   StudentOverviewDto,
@@ -207,6 +208,7 @@ export class StudentsService {
     const user = await this.repo.createUser({
       login: body.login,
       passwordHash: await this.users.hashPassword(plainPassword),
+      passwordEnc: this.users.sealPassword(plainPassword),
       role: "STUDENT",
     });
 
@@ -251,6 +253,23 @@ export class StudentsService {
     return student;
   }
 
+  /**
+   * Сгенерировать ученику новый пароль (для «забыл» и для аккаунтов без
+   * сохранённого пароля). Обновляет и bcrypt-хеш, и зашифрованную копию,
+   * инвалидирует старые сессии. Возвращает новый пароль (показывается один раз,
+   * но потом виден на карточке).
+   */
+  async resetPassword(id: string): Promise<ResetStudentPasswordResponseDto> {
+    const student = await this.loadOrThrow(id);
+    const plainPassword = generatePassword(new Set());
+    await this.repo.updateUserCredentials(student.userId, {
+      passwordHash: await this.users.hashPassword(plainPassword),
+      passwordEnc: this.users.sealPassword(plainPassword),
+    });
+    await this.users.bumpTokenVersion(student.userId);
+    return { login: student.user.login, password: plainPassword };
+  }
+
   async header(id: string): Promise<StudentHeaderDto> {
     const student = await this.loadOrThrow(id);
     const today = this.today();
@@ -291,6 +310,8 @@ export class StudentsService {
 
     return {
       login: student.user.login,
+      // Расшифрованный пароль для куратора; null — создан до фичи, нужен сброс.
+      password: this.users.openPassword(student.user.passwordEnc),
       phone: student.phone,
       age: student.age,
       city: student.city,

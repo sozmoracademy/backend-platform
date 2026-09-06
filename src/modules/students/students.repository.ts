@@ -74,7 +74,12 @@ export class StudentsRepository {
   findByIdFull(id: string) {
     return this.prisma.student.findUnique({
       where: { id },
-      include: { user: { select: { login: true } }, group: true, teacher: true, payment: true },
+      include: {
+        user: { select: { login: true, passwordEnc: true } },
+        group: true,
+        teacher: true,
+        payment: true,
+      },
     });
   }
 
@@ -146,6 +151,10 @@ export class StudentsRepository {
 
   createUser(data: Prisma.UserCreateInput) {
     return this.prisma.user.create({ data });
+  }
+
+  updateUserCredentials(userId: string, data: { passwordHash: string; passwordEnc: string }) {
+    return this.prisma.user.update({ where: { id: userId }, data });
   }
 
   createPayment(data: Prisma.PaymentCreateInput) {

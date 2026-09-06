@@ -26,6 +26,9 @@ export default function configuration() {
     cookie: {
       domain: env.COOKIE_DOMAIN ?? "localhost",
     },
+    credentials: {
+      encKey: env.CREDENTIALS_ENC_KEY,
+    },
     school: {
       tz: env.SCHOOL_TZ ?? "Asia/Bishkek",
     },

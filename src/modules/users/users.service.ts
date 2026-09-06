@@ -1,7 +1,9 @@
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import * as bcrypt from "bcryptjs";
 import type { Role, User } from "@prisma/client";
 import { PrismaService } from "../../infra/prisma/prisma.service";
+import { openSecret, sealSecret } from "../../common/domain";
 
 const BCRYPT_COST = 12;
 
@@ -12,7 +14,24 @@ const BCRYPT_COST = 12;
  */
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  private get encKey(): string {
+    return this.config.get<string>("credentials.encKey")!;
+  }
+
+  /** Зашифровать пароль для показа куратору (параллельно bcrypt-хешу). */
+  sealPassword(plain: string): string {
+    return sealSecret(plain, this.encKey);
+  }
+
+  /** Расшифровать (`null` — не сохранён / другой ключ). */
+  openPassword(sealed: string | null | undefined): string | null {
+    return openSecret(sealed, this.encKey);
+  }
 
   findByLogin(login: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { login } });

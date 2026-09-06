@@ -108,6 +108,8 @@ export class StudentOverviewGroupDto {
 
 export class StudentOverviewDto {
   @ApiProperty() login!: string;
+  /** Пароль ученика в открытом виде для куратора; `null` — не сохранён (нужен сброс). */
+  @ApiProperty({ nullable: true }) password!: string | null;
   @ApiProperty() phone!: string;
   @ApiProperty({ nullable: true }) age!: number | null;
   @ApiProperty() city!: string;
@@ -208,6 +210,11 @@ export class CreateStudentResponseDto {
   @ApiProperty() login!: string;
   @ApiProperty() password!: string;
   @ApiProperty({ nullable: true }) groupName!: string | null;
+}
+
+export class ResetStudentPasswordResponseDto {
+  @ApiProperty() login!: string;
+  @ApiProperty() password!: string;
 }
 
 export class BulkPatchDto {

@@ -27,6 +27,7 @@ jobs:
       DATABASE_URL: postgresql://sozmor:sozmor@localhost:5432/sozmor_test?schema=public
       JWT_ACCESS_SECRET: ci-access-secret
       JWT_REFRESH_SECRET: ci-refresh-secret
+      CREDENTIALS_ENC_KEY: ci-credentials-enc-key
       ACCESS_TTL: 15m
       REFRESH_TTL: 7d
       CORS_ORIGIN: http://localhost:5173
@@ -35,6 +36,12 @@ jobs:
       SEED_TODAY: "2026-08-18"
       THROTTLE_TTL: "300"
       THROTTLE_LIMIT: "1000"
+      BUNNY_STREAM_LIBRARY_ID: "999999"
+      BUNNY_STREAM_API_KEY: ci-bunny-api-key
+      BUNNY_STREAM_CDN_HOSTNAME: vz-ci.b-cdn.net
+      BUNNY_STREAM_TOKEN_KEY: ci-bunny-token-key
+      BUNNY_WEBHOOK_KEY: ci-bunny-webhook-key
+      BUNNY_PLAYBACK_TTL: "21600"
 
     steps:
       - uses: actions/checkout@v4

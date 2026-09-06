@@ -8,6 +8,7 @@ import {
   BulkUpdateStudentsRequestDto,
   CreateStudentRequestDto,
   CreateStudentResponseDto,
+  ResetStudentPasswordResponseDto,
   StudentHeaderDto,
   StudentLearningDto,
   StudentOverviewDto,
@@ -96,6 +97,11 @@ export class StudentsController {
     @Body() body: UpdateStudentGroupRequestDto,
   ): Promise<StudentHeaderDto> {
     return this.students.updateGroup(params.id, body);
+  }
+
+  @Post(":id/reset-password")
+  resetPassword(@Param() params: IdParamDto): Promise<ResetStudentPasswordResponseDto> {
+    return this.students.resetPassword(params.id);
   }
 
   @Post(":id/open-lesson")

@@ -85,6 +85,9 @@ model User {
   id           String   @id @default(cuid())
   login        String   @unique
   passwordHash String
+  /// Пароль, зашифрованный AES-256-GCM ключом CREDENTIALS_ENC_KEY — чтобы куратор
+  /// видел его на карточке ученика. null у аккаунтов до фичи и у куратора.
+  passwordEnc  String?
   role         Role
   /// Отображаемое имя — нужно только куратору (единый аккаунт без отдельной
   /// сущности-профиля, TЗ §3.2: «Куратор · Преподаватель»). У студента имя — на Student.

@@ -8,5 +8,6 @@ export * from "./next-step";
 export * from "./group-health";
 export * from "./attention";
 export * from "./credentials";
+export * from "./secret-box";
 export * from "./groups";
 export * from "./schedule";

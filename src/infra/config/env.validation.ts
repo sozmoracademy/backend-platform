@@ -9,6 +9,10 @@ export const envSchema = z.object({
 
   JWT_ACCESS_SECRET: z.string().min(1),
   JWT_REFRESH_SECRET: z.string().min(1),
+  // Ключ обратимого шифрования пароля ученика (показ на карточке куратора).
+  // Любая строка; фактический ключ — sha256 от неё. Сменить = старые passwordEnc
+  // перестанут читаться (нужен сброс пароля).
+  CREDENTIALS_ENC_KEY: z.string().min(1),
   ACCESS_TTL: z.string().default("15m"),
   REFRESH_TTL: z.string().default("7d"),
 
