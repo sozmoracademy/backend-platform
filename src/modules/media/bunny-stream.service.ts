@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { signedPlaylistUrl, tusUploadSignature } from "./bunny-token";
+import { mapWebhookStatus, signedPlaylistUrl, tusUploadSignature, type VideoStatusValue } from "./bunny-token";
 
 /** Данные для прямой TUS-загрузки из браузера — без API-ключа на фронте. */
 export interface TusUploadTarget {
@@ -78,20 +78,37 @@ export class BunnyStreamService {
     );
   }
 
-  /** Длительность видео в секундах из Bunny (или null, если недоступно). */
-  async getDurationSec(videoId: string): Promise<number | null> {
+  /** Сырой объект видео из Bunny (или null при сбое). */
+  private async fetchVideo(videoId: string): Promise<BunnyVideo | null> {
     try {
       const res = await fetch(
         `https://video.bunnycdn.com/library/${this.c.libraryId}/videos/${videoId}`,
         { headers: { AccessKey: this.c.apiKey } },
       );
       if (!res.ok) return null;
-      const video = (await res.json()) as BunnyVideo;
-      return Number.isFinite(video.length) && video.length > 0 ? Math.round(video.length) : null;
+      return (await res.json()) as BunnyVideo;
     } catch (err) {
-      this.logger.warn(`Bunny getDurationSec(${videoId}) не удался: ${String(err)}`);
+      this.logger.warn(`Bunny fetchVideo(${videoId}) не удался: ${String(err)}`);
       return null;
     }
+  }
+
+  /** Длительность видео в секундах из Bunny (или null, если недоступно). */
+  async getDurationSec(videoId: string): Promise<number | null> {
+    const video = await this.fetchVideo(videoId);
+    if (!video) return null;
+    return Number.isFinite(video.length) && video.length > 0 ? Math.round(video.length) : null;
+  }
+
+  /**
+   * Текущий статус обработки видео по данным Bunny (fallback, когда webhook не
+   * дошёл — напр. в локалке или при неверном Webhook URL в панели). `null` —
+   * Bunny недоступен, статус в БД не трогаем.
+   */
+  async getStatus(videoId: string): Promise<VideoStatusValue | null> {
+    const video = await this.fetchVideo(videoId);
+    if (!video || typeof video.status !== "number") return null;
+    return mapWebhookStatus(video.status);
   }
 
   /** Секрет из query webhook-URL — сверяется в `MediaController`. */

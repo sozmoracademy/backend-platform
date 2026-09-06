@@ -11,6 +11,6 @@ import { BunnyStreamService } from "./bunny-stream.service";
 @Module({
   controllers: [MediaController],
   providers: [MediaService, BunnyStreamService],
-  exports: [BunnyStreamService],
+  exports: [BunnyStreamService, MediaService],
 })
 export class MediaModule {}

@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { StudentCabinetRepository } from "./student-cabinet.repository";
 import { CourseResolverService } from "../courses/course-resolver.service";
 import { BunnyStreamService } from "../media/bunny-stream.service";
+import { MediaService } from "../media/media.service";
 import {
   activityDatesFor,
   bestAttemptOf,
@@ -81,6 +82,7 @@ export class StudentCabinetService {
     private readonly config: ConfigService,
     private readonly resolver: CourseResolverService,
     private readonly bunny: BunnyStreamService,
+    private readonly media: MediaService,
   ) {}
 
   private today(): string {
@@ -384,6 +386,11 @@ export class StudentCabinetService {
 
     const lesson = lessons.find((l) => l.order === order);
     if (!lesson) throw new NotFoundException("Урок не найден");
+
+    // Fallback, если webhook Bunny не дошёл: сверяем статус видео с Bunny.
+    if (lesson.videoStatus === "processing" && lesson.videoAssetId) {
+      lesson.videoStatus = await this.media.reconcile(lesson.videoAssetId, lesson.videoStatus);
+    }
 
     const state = lessonState(student.openedUpTo, completedOrders, clearedOrders, order);
     const prevLesson = lessons.find((l) => l.order === order - 1);

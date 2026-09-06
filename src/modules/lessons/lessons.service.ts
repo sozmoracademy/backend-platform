@@ -3,6 +3,7 @@ import type { VideoStatus } from "@prisma/client";
 import { LessonsRepository } from "./lessons.repository";
 import { CourseResolverService } from "../courses/course-resolver.service";
 import { BunnyStreamService } from "../media/bunny-stream.service";
+import { MediaService } from "../media/media.service";
 import { CreateLessonRequestDto } from "./dto/create-lesson.dto";
 import { LessonCatalogItemDto } from "./dto/lesson-catalog-item.dto";
 import { LessonEditorDto, UpdateLessonRequestDto } from "./dto/lesson-editor.dto";
@@ -14,6 +15,7 @@ export class LessonsService {
     private readonly lessons: LessonsRepository,
     private readonly resolver: CourseResolverService,
     private readonly bunny: BunnyStreamService,
+    private readonly media: MediaService,
   ) {}
 
   async catalog(courseProductId: string): Promise<LessonCatalogItemDto[]> {
@@ -73,6 +75,10 @@ export class LessonsService {
     const product = await this.resolver.byId(courseProductId);
     const lesson = await this.lessons.findByOrder(courseProductId, order);
     if (!lesson) throw new NotFoundException("Урок не найден");
+    // Fallback, если webhook Bunny не дошёл: сверяемся с Bunny и фиксируем ready/failed.
+    if (lesson.videoStatus === "processing" && lesson.videoAssetId) {
+      lesson.videoStatus = await this.media.reconcile(lesson.videoAssetId, lesson.videoStatus);
+    }
     return this.toEditorDto(courseProductId, product.language, product.format, lesson);
   }
 
