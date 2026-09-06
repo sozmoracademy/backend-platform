@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory, Reflector } from "@nestjs/core";
 import { ClassSerializerInterceptor, ValidationPipe } from "@nestjs/common";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { Logger } from "nestjs-pino";
@@ -9,9 +10,13 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   const config = app.get(ConfigService);
+
+  // За обратным прокси (Railway/облако): доверяем первому X-Forwarded-* хопу —
+  // корректный req.ip для троттлинга и req.protocol=https для Secure-cookie.
+  app.set("trust proxy", 1);
 
   app.use(helmet());
   app.use(cookieParser());

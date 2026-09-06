@@ -19,18 +19,29 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  private get isProd(): boolean {
+    return this.config.get<string>("env") === "production";
+  }
+
   private setRefreshCookie(res: Response, refreshToken: string) {
     res.cookie(REFRESH_COOKIE, refreshToken, {
       httpOnly: true,
-      secure: this.config.get<string>("env") === "production",
-      sameSite: "lax",
+      // Прод: фронт на другом домене (Vercel) → кросс-сайт XHR требует
+      // SameSite=None + Secure. Локально (http) — Lax: None без Secure браузер
+      // отвергнет, а на localhost всё first-party и Lax достаточно.
+      secure: this.isProd,
+      sameSite: this.isProd ? "none" : "lax",
       path: "/auth",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   }
 
   private clearRefreshCookie(res: Response) {
-    res.clearCookie(REFRESH_COOKIE, { path: "/auth" });
+    res.clearCookie(REFRESH_COOKIE, {
+      path: "/auth",
+      secure: this.isProd,
+      sameSite: this.isProd ? "none" : "lax",
+    });
   }
 
   @Public()
