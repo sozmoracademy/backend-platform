@@ -34,7 +34,9 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 300_000 } })
+  // Анти-брутфорс по паролю. 20 попыток/мин — с запасом для опечаток и dev,
+  // но неприемлемо для перебора.
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post("login")
   async login(
     @Body() body: LoginRequestDto,
@@ -46,7 +48,9 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 300_000 } })
+  // Не брутфорс-цель: нужен валидный подписанный refresh-cookie. Лимит щедрый —
+  // access-токен живёт в памяти, поэтому каждая перезагрузка/вкладка = один refresh.
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @Post("refresh")
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<RefreshResponseDto> {
