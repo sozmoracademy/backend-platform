@@ -43,6 +43,7 @@ describe("IDOR (e2e)", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({
         language: "en",
+        durationMonths: 6,
         startDate: "2026-10-01",
         practiceStart: "20:00",
         practiceEnd: "21:00",

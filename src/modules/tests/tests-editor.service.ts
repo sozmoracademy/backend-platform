@@ -9,12 +9,16 @@ import {
   UpdateTestRequestDto,
 } from "./dto/test-editor.dto";
 
-type FullTest = LessonTest & { questions: (TestQuestion & { options: QuestionOption[] })[] };
+type FullTest = LessonTest & {
+  questions: (TestQuestion & { options: QuestionOption[] })[];
+  lesson: { id: string; order: number };
+};
 
 /**
  * Редактор теста — роль curator (BACKEND.md §12: `/tests`, `/questions/:id`,
  * `/options/:id`). Отдельный сервис от студенческого `TestsService` — общий
- * только `TestsRepository`.
+ * только `TestsRepository`. Тест адресуется по `lessonId` (уникальный глобально),
+ * а не по `(productId, order)` — у куратора уже открыт конкретный урок с его id.
  */
 @Injectable()
 export class TestsEditorService {
@@ -23,7 +27,8 @@ export class TestsEditorService {
   private toDto(test: FullTest): TestEditorDto {
     return {
       id: test.id,
-      lessonOrder: test.lessonOrder,
+      lessonId: test.lesson.id,
+      lessonOrder: test.lesson.order,
       title: test.title,
       timeLimitSec: test.timeLimitSec,
       passingScore: test.passingScore,
@@ -38,22 +43,22 @@ export class TestsEditorService {
     };
   }
 
-  async byLessonOrder(order: number): Promise<TestEditorDto | null> {
-    const test = await this.repo.findFullByLessonOrder(order, false);
+  async byLessonId(lessonId: string): Promise<TestEditorDto | null> {
+    const test = await this.repo.findFullByLessonId(lessonId);
     return test ? this.toDto(test) : null;
   }
 
   async create(body: CreateTestRequestDto): Promise<TestEditorDto> {
-    const lesson = await this.repo.findLessonByOrder(body.lessonOrder);
+    const lesson = await this.repo.findLessonById(body.lessonId);
     if (!lesson) throw new BadRequestException("Урок не найден");
-    const existing = await this.repo.findFullByLessonOrder(body.lessonOrder, false);
+    const existing = await this.repo.findFullByLessonId(body.lessonId);
     if (existing) return this.toDto(existing);
 
     const test = await this.repo.createTest({
-      lessonOrder: body.lessonOrder,
-      title: `Тест к уроку ${body.lessonOrder}`,
+      lessonId: body.lessonId,
+      title: `Тест к уроку ${lesson.order}`,
     });
-    return this.toDto(test);
+    return this.toDto(await this.loadTestOrThrow(test.id));
   }
 
   private async loadTestOrThrow(id: string): Promise<FullTest> {

@@ -46,6 +46,7 @@ describe("students (e2e)", () => {
         city: "Бишкек",
         phone: "+996700000000",
         login: "e2e-newstudent",
+        password: "abcde",
         language: "en",
         type: "INDIVIDUAL",
         startDate: "2026-10-01",
@@ -57,7 +58,8 @@ describe("students (e2e)", () => {
       })
       .expect(201);
     expect(created.body.login).toBe("e2e-newstudent");
-    expect(created.body.password).toMatch(/^[a-z]{5}$/);
+    // Пароль приходит с формы и возвращается как есть (хранится bcrypt-хешем).
+    expect(created.body.password).toBe("abcde");
 
     // Дубликат логина отклоняется.
     await request(app.getHttpServer())
@@ -70,6 +72,7 @@ describe("students (e2e)", () => {
         city: "Ош",
         phone: "+996700000001",
         login: "e2e-newstudent",
+        password: "abcde",
         language: "en",
         type: "INDIVIDUAL",
         startDate: "2026-10-01",
@@ -87,6 +90,35 @@ describe("students (e2e)", () => {
       .send({ login: "e2e-newstudent", password: created.body.password })
       .expect(201);
     expect(login.body.user.student.firstName).toBe("Тест");
+  });
+
+  it("POST /students — короткий/пустой пароль отклоняется (400)", async () => {
+    const base = {
+      firstName: "Без",
+      lastName: "Пароля",
+      age: 20,
+      city: "Бишкек",
+      phone: "+996700000002",
+      login: "e2e-nopass",
+      language: "en",
+      type: "INDIVIDUAL",
+      startDate: "2026-10-01",
+      practiceStart: "20:00",
+      groupId: null,
+      manager: "Тест",
+      total: 20000,
+      paid: 0,
+    };
+    await request(app.getHttpServer())
+      .post("/students")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ ...base, password: "ab" })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post("/students")
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send(base)
+      .expect(400);
   });
 
   it("PATCH /students/:id/access — меняет статус и дату окончания", async () => {

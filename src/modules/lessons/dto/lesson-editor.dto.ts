@@ -8,6 +8,7 @@ export class LessonStatsDto {
 }
 
 export class LessonEditorDto {
+  @ApiProperty() id!: string;
   @ApiProperty() order!: number;
   @ApiProperty() title!: string;
   @ApiProperty() description!: string;

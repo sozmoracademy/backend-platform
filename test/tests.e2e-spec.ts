@@ -23,9 +23,9 @@ describe("tests / attempts (e2e)", () => {
   });
 
   it("GET /me/tests/:order — locked с причиной lesson_not_completed, если урок не завершён", async () => {
-    // "elmira" не проходила ни одного урока — тест урока 1 существует (published), но 1 не completed.
-    // Возьмём другого ученика без завершённого 1-го урока и с активным доступом: сгенерированного.
-    const login = await loginAs(app, "student20");
+    // Тест урока 1 существует (published) только на продукте en-group-6mo. Берём
+    // ученика этого продукта — "alina" (EN Group, группа g-en-0824, 6 месяцев).
+    const login = await loginAs(app, "alina");
     const res = await request(app.getHttpServer())
       .get("/me/tests/1")
       .set("Authorization", `Bearer ${login}`)
@@ -36,12 +36,15 @@ describe("tests / attempts (e2e)", () => {
   });
 
   it("сценарий полностью: intro → start → answer → submit → результат → повторный intro видит лучший результат", async () => {
-    const token = await loginAs(app, "kanat"); // s1: lesson 1 completed
+    // kanat (s1): урок 1 завершён, в сиде уже есть сданная попытка на 88%
+    // (тест-гейт, ТЗ инвариант 4) -> intro сразу "passed"; новая попытка на 100%
+    // должна стать лучшей.
+    const token = await loginAs(app, "kanat");
     const intro = await request(app.getHttpServer())
       .get("/me/tests/1")
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
-    expect(intro.body.availability).toBe("available");
+    expect(intro.body.availability).toBe("passed");
     expect(intro.body.questionCount).toBe(8);
 
     const start = await request(app.getHttpServer())

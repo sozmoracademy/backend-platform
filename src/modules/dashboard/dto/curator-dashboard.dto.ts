@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import type { MeetingStatus } from "@prisma/client";
 
 export class DashboardStatsDto {
   @ApiProperty() students!: number;
@@ -20,7 +21,7 @@ export class DashboardMeetingDto {
   @ApiProperty() startTime!: string;
   @ApiProperty() endTime!: string;
   @ApiProperty() meetUrl!: string;
-  @ApiProperty() status!: string;
+  @ApiProperty({ enum: ["scheduled", "completed", "cancelled"] }) status!: MeetingStatus;
   @ApiProperty({ nullable: true }) groupName!: string | null;
 }
 

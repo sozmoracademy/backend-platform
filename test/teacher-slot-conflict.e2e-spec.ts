@@ -24,6 +24,7 @@ describe("teacher slot conflict (e2e)", () => {
       .set("Authorization", `Bearer ${curatorToken}`)
       .send({
         language: "en",
+        durationMonths: 6,
         startDate: "2026-11-01",
         practiceStart: "20:00",
         practiceEnd: "21:00",
@@ -39,6 +40,7 @@ describe("teacher slot conflict (e2e)", () => {
       .set("Authorization", `Bearer ${curatorToken}`)
       .send({
         language: "en",
+        durationMonths: 6,
         startDate: "2026-11-01",
         practiceStart: "22:00",
         practiceEnd: "23:00",

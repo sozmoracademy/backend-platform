@@ -71,7 +71,7 @@ describe("findMatchingGroup", () => {
 describe("groupStage", () => {
   it("месяц/уровень по currentLesson группы", () => {
     const levelPlan = [{ month: 1, level: "A1" as const }];
-    expect(groupStage(4, levelPlan)).toEqual({ month: 1, level: "A1", lesson: 4 });
+    expect(groupStage(4, levelPlan, 54, 6)).toEqual({ month: 1, level: "A1", lesson: 4 });
   });
 });
 

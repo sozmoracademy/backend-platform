@@ -120,6 +120,8 @@ export interface WeekPlanDay {
   topic: string;
   meta: string;
   meetUrl?: string;
+  /** Время начала практики "HH:mm" — для окна подключения на клиенте. */
+  startTime?: string;
   lessonOrder?: number;
 }
 
@@ -173,6 +175,7 @@ export function weekPlan(params: {
         : `Видео · ${lesson ? Number.parseInt(lesson.duration, 10) : 12} мин`;
 
     const room = slot.kind === "practice" ? (meeting?.meetUrl ?? groupRoom) : undefined;
+    const startTime = slot.kind === "practice" ? (meeting?.startTime ?? "21:00") : undefined;
 
     return {
       date,
@@ -183,6 +186,7 @@ export function weekPlan(params: {
       topic,
       meta,
       ...(room ? { meetUrl: room } : {}),
+      ...(startTime ? { startTime } : {}),
       ...(!isRest && lesson ? { lessonOrder: lesson.order } : {}),
     };
   });

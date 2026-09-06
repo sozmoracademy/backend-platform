@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { StudentCabinetRepository } from "./student-cabinet.repository";
+import { CourseResolverService } from "../courses/course-resolver.service";
 import {
   activityDatesFor,
   bestAttemptOf,
@@ -15,6 +16,7 @@ import {
   stageStatus,
   streakDays,
   testAvailability,
+  testClearedOrders,
   testsStats,
   todayInTz,
   weekAgenda,
@@ -76,6 +78,7 @@ export class StudentCabinetService {
   constructor(
     private readonly repo: StudentCabinetRepository,
     private readonly config: ConfigService,
+    private readonly resolver: CourseResolverService,
   ) {}
 
   private today(): string {
@@ -95,9 +98,10 @@ export class StudentCabinetService {
 
   private async loadContext(studentId: string) {
     const student = await this.repo.findStudentOrThrow(studentId);
+    const product = await this.resolver.forStudent(student);
     const [lessons, tests, studentLessons, attempts, meetings] = await Promise.all([
-      this.repo.findLessons(),
-      this.repo.findTestsWithQuestionCount(),
+      this.repo.findLessons(product.id),
+      this.repo.findTestsWithQuestionCount(product.id),
       this.repo.findStudentLessons(studentId),
       this.repo.findAttempts(studentId),
       this.repo.findMeetings(student),
@@ -112,6 +116,7 @@ export class StudentCabinetService {
         .map((sl) => [sl.lessonOrder, this.toDateStr(sl.completedAt!)]),
     );
     const watchedByOrder = new Map(studentLessons.map((sl) => [sl.lessonOrder, sl.watchedPct]));
+    const orderByLessonId = new Map(lessons.map((l) => [l.id, l.order]));
 
     const testsPlain: PlainTest[] = tests.map((t) => ({
       id: t.id,
@@ -124,7 +129,7 @@ export class StudentCabinetService {
     }));
     const attemptsPlain: PlainAttempt[] = attempts.map((a) => ({
       testId: a.testId,
-      lessonOrder: a.lessonOrder,
+      lessonOrder: orderByLessonId.get(a.lessonId) ?? 0,
       status: a.status,
       expiresAt: a.expiresAt.toISOString(),
       score: a.score,
@@ -133,7 +138,7 @@ export class StudentCabinetService {
     }));
     const meetingsPlain: PlainMeeting[] = meetings.map((m) => ({
       id: m.id,
-      lessonOrder: m.lessonOrder,
+      lessonOrder: orderByLessonId.get(m.lessonId) ?? 0,
       scope: m.scope,
       title: m.title,
       date: this.toDateStr(m.date),
@@ -143,8 +148,17 @@ export class StudentCabinetService {
       status: m.status,
     }));
 
+    // Тест-гейт (ТЗ инвариант 4): уроки с зачтённым/отсутствующим тестом не
+    // блокируют открытие следующего. Считаем один раз на запрос.
+    const clearedOrders = testClearedOrders(
+      lessons.map((l) => l.order),
+      testsPlain,
+      attemptsPlain,
+    );
+
     return {
       student,
+      product,
       lessons,
       testsPlain,
       attemptsPlain,
@@ -152,6 +166,7 @@ export class StudentCabinetService {
       completedOrders,
       completedAtByOrder,
       watchedByOrder,
+      clearedOrders,
     };
   }
 
@@ -232,7 +247,8 @@ export class StudentCabinetService {
     const currentOrder = currentLessonOrder(student.openedUpTo, completedOrders);
     const currentLesson = lessons.find((l) => l.order === currentOrder) ?? null;
 
-    const blocks = await this.repo.findCourseBlocks();
+    const usedBlockNames = new Set(lessons.map((l) => l.block));
+    const blocks = (await this.repo.findCourseBlocks()).filter((b) => usedBlockNames.has(b.name));
     const stages = blocks.map((b) => ({ block: b.name, level: b.level as CefrLevel, month: b.month }));
     const levels = courseLevels(stages);
     const statusOfStage = (stage: (typeof stages)[number]) =>
@@ -312,9 +328,9 @@ export class StudentCabinetService {
 
   async course(studentId: string): Promise<MeCourseDto> {
     const ctx = await this.loadContext(studentId);
-    const { student, lessons, completedOrders } = ctx;
-    const product = await this.repo.findCourseProduct(student.language, student.type);
-    const blocks = await this.repo.findCourseBlocks();
+    const { student, product, lessons, completedOrders } = ctx;
+    const usedBlockNames = new Set(lessons.map((l) => l.block));
+    const blocks = (await this.repo.findCourseBlocks()).filter((b) => usedBlockNames.has(b.name));
 
     const blockDtos: MeCourseBlockDto[] = blocks.map((b) => ({
       block: b.name,
@@ -340,11 +356,11 @@ export class StudentCabinetService {
 
   async lessons(studentId: string): Promise<LessonListItemDto[]> {
     const ctx = await this.loadContext(studentId);
-    const { student, lessons, testsPlain, attemptsPlain, completedOrders } = ctx;
+    const { student, lessons, testsPlain, attemptsPlain, completedOrders, clearedOrders } = ctx;
     const now = new Date().toISOString();
 
     return lessons.map((l) => {
-      const state = lessonState(student.openedUpTo, completedOrders, l.order);
+      const state = lessonState(student.openedUpTo, completedOrders, clearedOrders, l.order);
       const test = this.lessonTestSummary(l.order, testsPlain, attemptsPlain, state === "completed", now);
       return {
         order: l.order,
@@ -360,16 +376,20 @@ export class StudentCabinetService {
 
   async lessonDetail(studentId: string, order: number): Promise<LessonDetailDto> {
     const ctx = await this.loadContext(studentId);
-    const { student, lessons, testsPlain, attemptsPlain, completedOrders, watchedByOrder } = ctx;
+    const { student, lessons, testsPlain, attemptsPlain, completedOrders, clearedOrders, watchedByOrder } =
+      ctx;
     const now = new Date().toISOString();
 
     const lesson = lessons.find((l) => l.order === order);
     if (!lesson) throw new NotFoundException("Урок не найден");
 
-    const state = lessonState(student.openedUpTo, completedOrders, order);
+    const state = lessonState(student.openedUpTo, completedOrders, clearedOrders, order);
     const prevLesson = lessons.find((l) => l.order === order - 1);
     const nextLesson = lessons.find((l) => l.order === order + 1);
-    const nextLocked = nextLesson ? nextLesson.order > student.openedUpTo : true;
+    // «Следующий урок закрыт» = его нет ИЛИ он не available под тест-гейтом.
+    const nextLocked = nextLesson
+      ? lessonState(student.openedUpTo, completedOrders, clearedOrders, nextLesson.order) !== "available"
+      : true;
     const test = this.lessonTestSummary(order, testsPlain, attemptsPlain, state === "completed", now);
     const previewVideoUrl = await this.repo.findPreviewVideoUrl();
 
@@ -470,7 +490,7 @@ export class StudentCabinetService {
   /** `POST /me/lessons/:order/watch` — BACKEND.md §7.2. */
   async watch(studentId: string, order: number, pct: number): Promise<WatchProgressResponseDto> {
     const ctx = await this.loadContext(studentId);
-    const { student, lessons, completedOrders, watchedByOrder } = ctx;
+    const { student, lessons, completedOrders, clearedOrders, watchedByOrder } = ctx;
     const today = this.today();
 
     if (this.accessStatusOf(student, today) !== "active") {
@@ -478,7 +498,10 @@ export class StudentCabinetService {
     }
     const lesson = lessons.find((l) => l.order === order);
     if (!lesson) throw new NotFoundException("Урок не найден");
-    if (order > student.openedUpTo) throw new ForbiddenException("Урок пока закрыт");
+    // Закрыт группой ИЛИ тест-гейтом (не сдан тест предыдущего урока).
+    if (lessonState(student.openedUpTo, completedOrders, clearedOrders, order) === "locked") {
+      throw new ForbiddenException("Урок пока закрыт");
+    }
 
     const wasCompleted = completedOrders.has(order);
     const nextPct = Math.max(watchedByOrder.get(order) ?? 0, pct);
@@ -487,12 +510,12 @@ export class StudentCabinetService {
 
     let completedAt: Date | null = null;
     if (wasCompleted) {
-      completedAt = (await this.repo.findStudentLesson(studentId, order))?.completedAt ?? null;
+      completedAt = (await this.repo.findStudentLesson(studentId, lesson.id))?.completedAt ?? null;
     } else if (completedJustNow) {
       completedAt = new Date(`${today}T00:00:00.000Z`);
     }
 
-    await this.repo.upsertStudentLesson(studentId, order, {
+    await this.repo.upsertStudentLesson(studentId, lesson.id, {
       watchedPct: nowCompleted ? 100 : nextPct,
       completedAt,
     });
@@ -501,7 +524,7 @@ export class StudentCabinetService {
     const updatedCompletedOrders = nowCompleted ? new Set(completedOrders).add(order) : completedOrders;
     return {
       watchedPct: nowCompleted ? 100 : nextPct,
-      state: lessonState(student.openedUpTo, updatedCompletedOrders, order),
+      state: lessonState(student.openedUpTo, updatedCompletedOrders, clearedOrders, order),
       completedJustNow,
     };
   }

@@ -13,37 +13,44 @@ export class StudentCabinetRepository {
     });
   }
 
-  findLessons() {
-    return this.prisma.lesson.findMany({ orderBy: { order: "asc" } });
+  findLessons(courseProductId: string) {
+    return this.prisma.lesson.findMany({ where: { courseProductId }, orderBy: { order: "asc" } });
   }
 
-  findLessonByOrder(order: number) {
-    return this.prisma.lesson.findUnique({ where: { order } });
+  findLessonByOrder(courseProductId: string, order: number) {
+    return this.prisma.lesson.findUnique({ where: { courseProductId_order: { courseProductId, order } } });
   }
 
-  findTestsWithQuestionCount() {
-    return this.prisma.lessonTest.findMany({ include: { _count: { select: { questions: true } } } });
+  findTestsWithQuestionCount(courseProductId: string) {
+    return this.prisma.lessonTest
+      .findMany({
+        where: { lesson: { courseProductId } },
+        include: { _count: { select: { questions: true } }, lesson: { select: { order: true } } },
+      })
+      .then((rows) => rows.map((t) => ({ ...t, lessonOrder: t.lesson.order })));
   }
 
   findStudentLessons(studentId: string) {
-    return this.prisma.studentLesson.findMany({ where: { studentId } });
+    return this.prisma.studentLesson
+      .findMany({ where: { studentId }, include: { lesson: { select: { order: true } } } })
+      .then((rows) => rows.map((r) => ({ ...r, lessonOrder: r.lesson.order })));
   }
 
-  findStudentLesson(studentId: string, lessonOrder: number) {
+  findStudentLesson(studentId: string, lessonId: string) {
     return this.prisma.studentLesson.findUnique({
-      where: { studentId_lessonOrder: { studentId, lessonOrder } },
+      where: { studentId_lessonId: { studentId, lessonId } },
     });
   }
 
   upsertStudentLesson(
     studentId: string,
-    lessonOrder: number,
+    lessonId: string,
     data: { watchedPct: number; completedAt: Date | null },
   ) {
     return this.prisma.studentLesson.upsert({
-      where: { studentId_lessonOrder: { studentId, lessonOrder } },
+      where: { studentId_lessonId: { studentId, lessonId } },
       update: data,
-      create: { studentId, lessonOrder, ...data },
+      create: { studentId, lessonId, ...data },
     });
   }
 
@@ -64,10 +71,6 @@ export class StudentCabinetRepository {
       where: { scope: "INDIVIDUAL", studentId: student.id },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
-  }
-
-  findCourseProduct(language: Student["language"], type: Student["type"]) {
-    return this.prisma.courseProduct.findUnique({ where: { language_format: { language, format: type } } });
   }
 
   findCourseBlocks() {

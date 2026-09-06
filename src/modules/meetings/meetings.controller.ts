@@ -7,6 +7,7 @@ import {
   CreateMeetingRequestDto,
   MarkAttendanceRequestDto,
   MeetingsQueryDto,
+  ScheduleGroupMeetingRequestDto,
   ScheduleMeetingDto,
   UpdateMeetingRequestDto,
 } from "./dto/meeting.dto";
@@ -39,5 +40,21 @@ export class MeetingsController {
     @Body() body: MarkAttendanceRequestDto,
   ): Promise<ScheduleMeetingDto> {
     return this.meetings.markAttendance(params.id, body);
+  }
+}
+
+/** `groups/:id/meetings` — назначение практики с экрана группы (BACKEND.md §7.5). */
+@ApiTags("meetings")
+@Roles("CURATOR")
+@Controller("groups/:id/meetings")
+export class GroupMeetingsController {
+  constructor(private readonly meetings: MeetingsService) {}
+
+  @Post()
+  schedule(
+    @Param() params: IdParamDto,
+    @Body() body: ScheduleGroupMeetingRequestDto,
+  ): Promise<ScheduleMeetingDto> {
+    return this.meetings.createForGroup(params.id, body);
   }
 }

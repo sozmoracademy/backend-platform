@@ -9,7 +9,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -109,8 +108,10 @@ model CourseProduct {
   currency       String     @default("сом")
   features       String[]
   levelPlan      Json
+  lessons        Lesson[]
+  groups         Group[]
 
-  @@unique([language, format])
+  @@unique([language, format, durationMonths])
 }
 
 model CourseBlock {
@@ -121,39 +122,45 @@ model CourseBlock {
 }
 
 model Lesson {
-  id          String          @id @default(cuid())
-  order       Int             @unique
-  title       String
-  description String
-  videoUrl    String
-  duration    String
-  block       String
-  test        LessonTest?
-  progress    StudentLesson[]
-  meetings    Meeting[]
+  id              String          @id @default(cuid())
+  courseProduct   CourseProduct   @relation(fields: [courseProductId], references: [id], onDelete: Cascade)
+  courseProductId String
+  order           Int
+  title           String
+  description     String
+  videoUrl        String
+  duration        String
+  block           String
+  test            LessonTest?
+  progress        StudentLesson[]
+  meetings        Meeting[]
+  attempts        TestAttempt[]
 
+  @@unique([courseProductId, order])
   @@index([block])
 }
 
 model Group {
-  id            String      @id @default(cuid())
-  code          String      @unique
-  name          String
-  language      Lang
-  startDate     DateTime    @db.Date
-  endDate       DateTime    @db.Date
-  practiceStart String
-  practiceEnd   String
-  teacher       Teacher?    @relation(fields: [teacherId], references: [id])
-  teacherId     String?
-  maxStudents   Int         @default(50)
-  status        GroupStatus @default(recruiting)
-  currentLesson Int         @default(1)
-  meetUrl       String      @default("")
-  students      Student[]
-  meetings      Meeting[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id              String        @id @default(cuid())
+  code            String        @unique
+  name            String
+  language        Lang
+  courseProduct   CourseProduct @relation(fields: [courseProductId], references: [id])
+  courseProductId String
+  startDate       DateTime      @db.Date
+  endDate         DateTime      @db.Date
+  practiceStart   String
+  practiceEnd     String
+  teacher         Teacher?      @relation(fields: [teacherId], references: [id])
+  teacherId       String?
+  maxStudents     Int           @default(50)
+  status          GroupStatus   @default(recruiting)
+  currentLesson   Int           @default(1)
+  meetUrl         String        @default("")
+  students        Student[]
+  meetings        Meeting[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model Student {
@@ -197,13 +204,13 @@ model Student {
 model StudentLesson {
   student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId   String
-  lesson      Lesson    @relation(fields: [lessonOrder], references: [order])
-  lessonOrder Int
+  lesson      Lesson    @relation(fields: [lessonId], references: [id])
+  lessonId    String
   watchedPct  Int       @default(0)
   completedAt DateTime?
   updatedAt   DateTime  @updatedAt
 
-  @@id([studentId, lessonOrder])
+  @@id([studentId, lessonId])
 }
 
 model Payment {
@@ -217,8 +224,8 @@ model Payment {
 
 model Meeting {
   id          String              @id @default(cuid())
-  lesson      Lesson              @relation(fields: [lessonOrder], references: [order])
-  lessonOrder Int
+  lesson      Lesson              @relation(fields: [lessonId], references: [id])
+  lessonId    String
   scope       MeetingScope
   group       Group?              @relation(fields: [groupId], references: [id])
   groupId     String?
@@ -250,8 +257,8 @@ model MeetingAttendance {
 
 model LessonTest {
   id           String         @id @default(cuid())
-  lesson       Lesson         @relation(fields: [lessonOrder], references: [order])
-  lessonOrder  Int            @unique
+  lesson       Lesson         @relation(fields: [lessonId], references: [id])
+  lessonId     String         @unique
   title        String
   timeLimitSec Int            @default(300)
   passingScore Int            @default(70)
@@ -284,7 +291,8 @@ model TestAttempt {
   id             String        @id @default(cuid())
   test           LessonTest    @relation(fields: [testId], references: [id])
   testId         String
-  lessonOrder    Int
+  lesson         Lesson        @relation(fields: [lessonId], references: [id])
+  lessonId       String
   student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId      String
   startedAt      DateTime      @default(now())

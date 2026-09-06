@@ -4,6 +4,7 @@ import type { Teacher } from "@prisma/client";
 import { TeachersRepository } from "./teachers.repository";
 import { groupStage, todayInTz, type LevelPlanEntry } from "../../common/domain";
 import { PrismaService } from "../../infra/prisma/prisma.service";
+import { CourseResolverService } from "../courses/course-resolver.service";
 import {
   CreateTeacherRequestDto,
   TeacherDetailDto,
@@ -18,6 +19,7 @@ export class TeachersService {
     private readonly repo: TeachersRepository,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly resolver: CourseResolverService,
   ) {}
 
   private today(): Date {
@@ -85,11 +87,10 @@ export class TeachersService {
 
     const groupDtos = await Promise.all(
       groups.map(async (g) => {
-        const product = await this.prisma.courseProduct.findUnique({
-          where: { language_format: { language: g.language, format: "GROUP" } },
-        });
-        const levelPlan = (product?.levelPlan as unknown as LevelPlanEntry[]) ?? [];
-        const stage = groupStage(g.currentLesson, levelPlan);
+        const product = await this.resolver.byId(g.courseProductId);
+        const levelPlan = (product.levelPlan as unknown as LevelPlanEntry[]) ?? [];
+        const lessonCount = await this.resolver.countLessons(g.courseProductId);
+        const stage = groupStage(g.currentLesson, levelPlan, lessonCount, product.durationMonths);
         return {
           id: g.id,
           name: g.name,

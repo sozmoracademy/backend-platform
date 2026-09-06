@@ -3,7 +3,6 @@ import { ApiTags } from "@nestjs/swagger";
 import type { Response } from "express";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { IdParamDto } from "../../common/dto/id-param.dto";
-import { OrderParamDto } from "../../common/dto/order-param.dto";
 import { TestsEditorService } from "./tests-editor.service";
 import {
   CreateTestRequestDto,
@@ -20,9 +19,9 @@ import {
 export class TestsEditorController {
   constructor(private readonly editor: TestsEditorService) {}
 
-  @Get("tests/:order")
-  async byLessonOrder(@Param() params: OrderParamDto, @Res() res: Response): Promise<void> {
-    const test = await this.editor.byLessonOrder(params.order);
+  @Get("tests/lesson/:id")
+  async byLessonId(@Param() params: IdParamDto, @Res() res: Response): Promise<void> {
+    const test = await this.editor.byLessonId(params.id);
     // Явный JSON `null` (не пустое тело, BACKEND.md §12) — Nest иначе отдаёт `null`
     // как пустой ответ без тела, который `response.json()` на фронте не распарсит.
     res.status(HttpStatus.OK).json(test);

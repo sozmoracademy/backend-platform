@@ -3,6 +3,8 @@
 // референсе; `prisma/seed.ts` сдвигает их на разницу между `SEED_TODAY` и
 // `REFERENCE_TODAY`, чтобы демо-данные оставались согласованы с «сегодня».
 
+import { productIdFor } from "./curriculum";
+
 export const REFERENCE_TODAY = "2026-08-18";
 
 export type LanguageCode = "en" | "ru";
@@ -34,6 +36,8 @@ export interface SeedGroup {
   code: string;
   name: string;
   language: LanguageCode;
+  durationMonths: number;
+  courseProductId: string;
   startDate: string;
   endDate: string;
   practiceStart: string;
@@ -68,6 +72,7 @@ function endAfterMonths(startDate: string, months: number) {
 interface GroupRow {
   id: string;
   language: LanguageCode;
+  durationMonths: number;
   startDate: string;
   practiceStart: string;
   practiceEnd: string;
@@ -89,8 +94,21 @@ function makeGroupRow(
   currentLesson: number,
   meetUrl: string,
   maxStudents = 50,
+  durationMonths = 6,
 ): GroupRow {
-  return { id, language, startDate, practiceStart, practiceEnd, teacherId, status, currentLesson, meetUrl, maxStudents };
+  return {
+    id,
+    language,
+    durationMonths,
+    startDate,
+    practiceStart,
+    practiceEnd,
+    teacherId,
+    status,
+    currentLesson,
+    meetUrl,
+    maxStudents,
+  };
 }
 
 /** Нумерует потоки по языку в порядке даты старта: EN-01, EN-02, … / RU-01, … */
@@ -109,8 +127,10 @@ function assignGroupCodes(rows: GroupRow[]): SeedGroup[] {
       code,
       name: groupName(code, g.language, g.startDate, g.practiceStart),
       language: g.language,
+      durationMonths: g.durationMonths,
+      courseProductId: productIdFor(g.language, "GROUP", g.durationMonths),
       startDate: g.startDate,
-      endDate: endAfterMonths(g.startDate, 6),
+      endDate: endAfterMonths(g.startDate, g.durationMonths),
       practiceStart: g.practiceStart,
       practiceEnd: g.practiceEnd,
       teacherId: g.teacherId,
@@ -131,6 +151,9 @@ export const GROUPS: SeedGroup[] = assignGroupCodes([
   makeGroupRow("g-ru-0907", "ru", "2026-09-07", "20:00", "21:00", "t5", "recruiting", 1, ""),
   makeGroupRow("g-ru-0914", "ru", "2026-09-14", "21:00", "22:00", null, "recruiting", 1, "https://meet.google.com/rus-0914-grp"),
   makeGroupRow("g-en-0518", "en", "2026-05-10", "21:00", "22:00", "t1", "finished", 54, "https://meet.google.com/eng-old-grp"),
+  // Демо-группы на 3-месячном тарифе — для ручной проверки per-product сценариев.
+  makeGroupRow("g-en-0928", "en", "2026-09-28", "19:00", "20:00", "t2", "recruiting", 1, "https://meet.google.com/eng-0928-grp", 50, 3),
+  makeGroupRow("g-ru-0928", "ru", "2026-09-28", "19:00", "20:00", "t5", "recruiting", 1, "https://meet.google.com/rus-0928-grp", 50, 3),
 ]);
 
 export interface SeedPayment {
@@ -218,9 +241,11 @@ const CITIES = ["Бишкек", "Ош", "Джалал-Абад", "Каракол
 const FIRST_NAMES = ["Айгерим", "Нурбек", "Азиз", "Салтанат", "Тимур", "Жамиля", "Эрлан", "Гулназ", "Максат", "Асель", "Бакыт", "Динара", "Руслан", "Чолпон", "Данияр", "Айпери", "Кубат", "Мээрим", "Улан", "Назгуль"];
 const LAST_NAMES = ["Абдиев", "Токтосунова", "Мамытов", "Исакова", "Орозов", "Бекова", "Сыдыков", "Алиева", "Жумабаев", "Турсунова", "Касымов", "Эргешова", "Досов", "Бейшеналиева", "Уметалиев", "Кадырова"];
 
-function productPriceAndDuration(language: LanguageCode, type: CourseType) {
+function productPriceAndDuration(language: LanguageCode, type: CourseType, durationMonths: number) {
   if (type === "INDIVIDUAL") return { price: 20000, durationMonths: 1 };
-  return { price: language === "en" ? 15000 : 12000, durationMonths: 6 };
+  const basePrice = language === "en" ? 15000 : 12000;
+  // 3-месячный тариф вдвое короче — цена пропорционально ниже 6-месячного.
+  return { price: durationMonths === 3 ? Math.round(basePrice * 0.6) : basePrice, durationMonths };
 }
 
 function generateStudents(count: number): SeedStudent[] {
@@ -231,9 +256,9 @@ function generateStudents(count: number): SeedStudent[] {
     const language: LanguageCode = i % 3 === 0 ? "ru" : "en";
     const isIndividual = i % 7 === 0;
     const type: CourseType = isIndividual ? "INDIVIDUAL" : "GROUP";
-    const product = productPriceAndDuration(language, type);
     const pool = recruitingGroups.filter((g) => g.language === language);
     const group = !isIndividual && pool.length ? pool[i % pool.length]! : null;
+    const product = productPriceAndDuration(language, type, group?.durationMonths ?? 6);
     const startDate = group ? group.startDate : "2026-08-20";
     const openedUpTo = group ? group.currentLesson : 1 + (i % 6);
     const completedCount = Math.max(0, Math.min(openedUpTo - 1, (i * 3) % (openedUpTo + 1)));
@@ -285,6 +310,7 @@ export const CURATOR = {
 
 export interface SeedMeeting {
   id: string;
+  courseProductId: string;
   lessonOrder: number;
   scope: "GROUP" | "INDIVIDUAL";
   groupId: string | null;
@@ -298,29 +324,33 @@ export interface SeedMeeting {
   attended?: string[];
 }
 
+const EN_GROUP_6MO = productIdFor("en", "GROUP", 6);
+const RU_GROUP_6MO = productIdFor("ru", "GROUP", 6);
+const EN_INDIVIDUAL_1MO = productIdFor("en", "INDIVIDUAL", 1);
+
 export const MEETINGS: SeedMeeting[] = [
   {
-    id: "m1", lessonOrder: 4, scope: "GROUP", groupId: "g-en-0824", studentId: null,
+    id: "m1", courseProductId: EN_GROUP_6MO, lessonOrder: 4, scope: "GROUP", groupId: "g-en-0824", studentId: null,
     title: "Практика: Артикли a / an / the", date: "2026-08-19", startTime: "20:00", endTime: "21:00",
     meetUrl: "https://meet.google.com/eng-0818-grp", status: "scheduled",
   },
   {
-    id: "m2", lessonOrder: 5, scope: "GROUP", groupId: "g-en-0824", studentId: null,
+    id: "m2", courseProductId: EN_GROUP_6MO, lessonOrder: 5, scope: "GROUP", groupId: "g-en-0824", studentId: null,
     title: "Практика: Множественное число", date: "2026-08-21", startTime: "20:00", endTime: "21:00",
     meetUrl: "https://meet.google.com/eng-0818-grp", status: "scheduled",
   },
   {
-    id: "m3", lessonOrder: 3, scope: "GROUP", groupId: "g-en-0824", studentId: null,
+    id: "m3", courseProductId: EN_GROUP_6MO, lessonOrder: 3, scope: "GROUP", groupId: "g-en-0824", studentId: null,
     title: "Практика: Личные местоимения", date: "2026-08-17", startTime: "20:00", endTime: "21:00",
     meetUrl: "https://meet.google.com/eng-0818-grp", status: "completed", attended: ["s1", "s2"],
   },
   {
-    id: "m4", lessonOrder: 4, scope: "GROUP", groupId: "g-ru-0824", studentId: null,
+    id: "m4", courseProductId: RU_GROUP_6MO, lessonOrder: 4, scope: "GROUP", groupId: "g-ru-0824", studentId: null,
     title: "Практика: Русский · Lesson 4", date: "2026-08-19", startTime: "20:00", endTime: "21:00",
     meetUrl: "https://meet.google.com/rus-0818-grp", status: "scheduled",
   },
   {
-    id: "m5", lessonOrder: 7, scope: "INDIVIDUAL", groupId: null, studentId: "s3",
+    id: "m5", courseProductId: EN_INDIVIDUAL_1MO, lessonOrder: 7, scope: "INDIVIDUAL", groupId: null, studentId: "s3",
     title: "Индивидуальная практика: Числа и время", date: "2026-08-19", startTime: "19:00", endTime: "20:00",
     meetUrl: "https://meet.google.com/ind-aibek-01", status: "scheduled",
   },
@@ -374,6 +404,7 @@ function makeQuestion(order: number, text: string, correctIndex: number, options
 
 export interface SeedTest {
   id: string;
+  courseProductId: string;
   lessonOrder: number;
   title: string;
   timeLimitSec: number;
@@ -385,6 +416,7 @@ export interface SeedTest {
 export const TESTS: SeedTest[] = [
   {
     id: "test-1",
+    courseProductId: EN_GROUP_6MO,
     lessonOrder: 1,
     title: "Тест к уроку 1",
     timeLimitSec: 300,

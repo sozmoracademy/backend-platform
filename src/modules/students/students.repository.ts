@@ -55,9 +55,12 @@ export class StudentsRepository {
         where,
         include: {
           user: { select: { login: true } },
-          group: { select: { code: true, name: true } },
+          group: { select: { code: true, name: true, courseProductId: true } },
           payment: true,
-          lessons: { where: { completedAt: { not: null } }, select: { lessonOrder: true } },
+          lessons: {
+            where: { completedAt: { not: null } },
+            select: { lesson: { select: { order: true } } },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * PAGE_SIZE,
@@ -76,10 +79,12 @@ export class StudentsRepository {
   }
 
   findCompletedOrders(studentId: string) {
-    return this.prisma.studentLesson.findMany({
-      where: { studentId, completedAt: { not: null } },
-      select: { lessonOrder: true },
-    });
+    return this.prisma.studentLesson
+      .findMany({
+        where: { studentId, completedAt: { not: null } },
+        select: { lesson: { select: { order: true } } },
+      })
+      .then((rows) => rows.map((r) => ({ lessonOrder: r.lesson.order })));
   }
 
   findMeetingsFor(student: { id: string; type: CourseType; groupId: string | null }) {
@@ -98,8 +103,13 @@ export class StudentsRepository {
     });
   }
 
-  findTestsWithQuestionCount() {
-    return this.prisma.lessonTest.findMany({ include: { _count: { select: { questions: true } } } });
+  findTestsWithQuestionCount(courseProductId: string) {
+    return this.prisma.lessonTest
+      .findMany({
+        where: { lesson: { courseProductId } },
+        include: { _count: { select: { questions: true } }, lesson: { select: { order: true } } },
+      })
+      .then((rows) => rows.map((t) => ({ ...t, lessonOrder: t.lesson.order })));
   }
 
   findAttemptsForStudent(studentId: string) {
@@ -110,12 +120,12 @@ export class StudentsRepository {
     return this.prisma.user.count({ where: { login } }).then((n) => n > 0);
   }
 
-  findAllLessonsLight() {
-    return this.prisma.lesson.findMany({ orderBy: { order: "asc" }, select: { order: true, title: true } });
-  }
-
-  findCourseProduct(language: Lang, format: CourseType) {
-    return this.prisma.courseProduct.findUnique({ where: { language_format: { language, format } } });
+  findAllLessonsLight(courseProductId: string) {
+    return this.prisma.lesson.findMany({
+      where: { courseProductId },
+      orderBy: { order: "asc" },
+      select: { order: true, title: true },
+    });
   }
 
   findMatchingGroupCandidates(language: Lang, fromDate: Date) {

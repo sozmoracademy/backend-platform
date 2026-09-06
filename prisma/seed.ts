@@ -6,9 +6,13 @@
  * («сегодня», «на этой неделе», «требует внимания») оставались согласованы
  * при смене опорной даты. По умолчанию `SEED_TODAY === REFERENCE_TODAY` → сдвиг 0.
  */
+import { join } from "node:path";
+
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type Lang, type CourseType as PrismaCourseType } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
-import { COURSE_BLOCKS, COURSE_PRODUCTS, LESSONS } from "./seed-data/curriculum";
+import { config as loadEnv } from "dotenv";
+import { COURSE_BLOCKS, COURSE_PRODUCTS, LESSONS, lessonIdKey, productIdFor } from "./seed-data/curriculum";
 import {
   CURATOR,
   GROUPS,
@@ -20,7 +24,14 @@ import {
   TESTS,
 } from "./seed-data/academy";
 
-const prisma = new PrismaClient();
+// Prisma 7 не читает `.env` сам и требует driver adapter в конструкторе.
+// `dotenv` не переопределяет уже выставленные переменные — прогон из
+// test/global-setup.js (DATABASE_URL от .env.test) не затрагивается.
+loadEnv({ path: join(__dirname, "..", ".env") });
+
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+});
 const BCRYPT_COST = 12;
 
 const seedToday = process.env.SEED_TODAY ?? REFERENCE_TODAY;
@@ -35,6 +46,25 @@ function shiftDate(iso: string): Date {
   return d;
 }
 
+/** courseProductId#order -> Lesson.id, заполняется в seedCurriculum(), используется всеми остальными шагами. */
+const lessonIdByKey = new Map<string, string>();
+
+function lessonId(courseProductId: string, order: number): string {
+  const id = lessonIdByKey.get(lessonIdKey(courseProductId, order));
+  if (!id) throw new Error(`Не найден Lesson для courseProductId=${courseProductId} order=${order}`);
+  return id;
+}
+
+/** Резолвит courseProductId ученика: GROUP — через его группу, INDIVIDUAL — язык+формат. */
+function studentProductId(student: { language: string; type: string; groupId: string | null }): string {
+  if (student.type === "INDIVIDUAL") {
+    return productIdFor(student.language as "en" | "ru", "INDIVIDUAL", 1);
+  }
+  const group = GROUPS.find((g) => g.id === student.groupId);
+  if (!group) throw new Error(`Не найдена группа ${student.groupId} для студента`);
+  return group.courseProductId;
+}
+
 async function seedCurriculum() {
   for (const block of COURSE_BLOCKS) {
     await prisma.courseBlock.upsert({
@@ -47,7 +77,11 @@ async function seedCurriculum() {
   for (const product of COURSE_PRODUCTS) {
     await prisma.courseProduct.upsert({
       where: {
-        language_format: { language: product.language as Lang, format: product.format as PrismaCourseType },
+        language_format_durationMonths: {
+          language: product.language as Lang,
+          format: product.format as PrismaCourseType,
+          durationMonths: product.durationMonths,
+        },
       },
       update: {
         title: product.title,
@@ -58,6 +92,7 @@ async function seedCurriculum() {
         levelPlan: product.levelPlan,
       },
       create: {
+        id: product.id,
         language: product.language as Lang,
         format: product.format as PrismaCourseType,
         title: product.title,
@@ -71,8 +106,8 @@ async function seedCurriculum() {
   }
 
   for (const lesson of LESSONS) {
-    await prisma.lesson.upsert({
-      where: { order: lesson.order },
+    const row = await prisma.lesson.upsert({
+      where: { courseProductId_order: { courseProductId: lesson.courseProductId, order: lesson.order } },
       update: {
         title: lesson.title,
         description: lesson.description,
@@ -81,6 +116,7 @@ async function seedCurriculum() {
         duration: lesson.duration,
       },
       create: {
+        courseProductId: lesson.courseProductId,
         order: lesson.order,
         title: lesson.title,
         description: lesson.description,
@@ -89,6 +125,7 @@ async function seedCurriculum() {
         duration: lesson.duration,
       },
     });
+    lessonIdByKey.set(lessonIdKey(lesson.courseProductId, lesson.order), row.id);
   }
   console.log(
     `  · CourseBlock=${COURSE_BLOCKS.length} CourseProduct=${COURSE_PRODUCTS.length} Lesson=${LESSONS.length}`,
@@ -126,6 +163,7 @@ async function seedGroups() {
       update: {
         name: group.name,
         language: group.language as Lang,
+        courseProductId: group.courseProductId,
         startDate: shiftDate(group.startDate),
         endDate: shiftDate(group.endDate),
         practiceStart: group.practiceStart,
@@ -141,6 +179,7 @@ async function seedGroups() {
         code: group.code,
         name: group.name,
         language: group.language as Lang,
+        courseProductId: group.courseProductId,
         startDate: shiftDate(group.startDate),
         endDate: shiftDate(group.endDate),
         practiceStart: group.practiceStart,
@@ -234,19 +273,21 @@ async function seedStudents() {
       },
     });
 
+    const productId = studentProductId(student);
     const watchedOrders = new Set([...student.completed, ...Object.keys(student.watched).map(Number)]);
     for (const order of watchedOrders) {
       const completedAtIso = student.completedAt[order];
       const isCompleted = student.completed.includes(order);
+      const lid = lessonId(productId, order);
       await prisma.studentLesson.upsert({
-        where: { studentId_lessonOrder: { studentId: student.id, lessonOrder: order } },
+        where: { studentId_lessonId: { studentId: student.id, lessonId: lid } },
         update: {
           watchedPct: isCompleted ? 100 : (student.watched[order] ?? 0),
           completedAt: isCompleted ? shiftDate(completedAtIso ?? student.startDate) : null,
         },
         create: {
           studentId: student.id,
-          lessonOrder: order,
+          lessonId: lid,
           watchedPct: isCompleted ? 100 : (student.watched[order] ?? 0),
           completedAt: isCompleted ? shiftDate(completedAtIso ?? student.startDate) : null,
         },
@@ -258,10 +299,11 @@ async function seedStudents() {
 
 async function seedMeetings() {
   for (const meeting of MEETINGS) {
+    const lid = lessonId(meeting.courseProductId, meeting.lessonOrder);
     await prisma.meeting.upsert({
       where: { id: meeting.id },
       update: {
-        lessonOrder: meeting.lessonOrder,
+        lessonId: lid,
         scope: meeting.scope,
         groupId: meeting.groupId,
         studentId: meeting.studentId,
@@ -274,7 +316,7 @@ async function seedMeetings() {
       },
       create: {
         id: meeting.id,
-        lessonOrder: meeting.lessonOrder,
+        lessonId: lid,
         scope: meeting.scope,
         groupId: meeting.groupId,
         studentId: meeting.studentId,
@@ -300,8 +342,9 @@ async function seedMeetings() {
 
 async function seedTests() {
   for (const test of TESTS) {
+    const lid = lessonId(test.courseProductId, test.lessonOrder);
     const dbTest = await prisma.lessonTest.upsert({
-      where: { lessonOrder: test.lessonOrder },
+      where: { lessonId: lid },
       update: {
         title: test.title,
         timeLimitSec: test.timeLimitSec,
@@ -310,7 +353,7 @@ async function seedTests() {
       },
       create: {
         id: test.id,
-        lessonOrder: test.lessonOrder,
+        lessonId: lid,
         title: test.title,
         timeLimitSec: test.timeLimitSec,
         passingScore: test.passingScore,
@@ -349,6 +392,34 @@ async function seedTests() {
   console.log(`  · LessonTest=${TESTS.length}`);
 }
 
+/**
+ * Сданная попытка теста урока 1 у Каната (s1) — благодаря ей его урок 3 открыт
+ * под тест-гейтом (ТЗ инвариант 4). У Алины (s2) попытки нет: она завершила
+ * уроки, но следующий закрыт до сдачи теста 1 — демо самого гейта.
+ */
+async function seedAttempts() {
+  const test = TESTS[0];
+  if (!test) return;
+  const lid = lessonId(test.courseProductId, test.lessonOrder);
+  const id = "attempt-s1-test1";
+  const data = {
+    testId: test.id,
+    lessonId: lid,
+    studentId: "s1",
+    startedAt: shiftDate("2026-08-19"),
+    expiresAt: shiftDate("2026-08-19"),
+    submittedAt: shiftDate("2026-08-19"),
+    answers: {},
+    correctCount: 7,
+    totalQuestions: test.questions.length,
+    score: 88,
+    passed: true,
+    status: "submitted" as const,
+  };
+  await prisma.testAttempt.upsert({ where: { id }, update: data, create: { id, ...data } });
+  console.log(`  · TestAttempt=1`);
+}
+
 async function seedNotes() {
   for (const note of NOTES) {
     await prisma.note.upsert({
@@ -384,6 +455,7 @@ async function main() {
   await seedStudents();
   await seedMeetings();
   await seedTests();
+  await seedAttempts();
   await seedNotes();
   await seedAppSettings();
   console.log("Готово.");

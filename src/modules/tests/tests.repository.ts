@@ -6,25 +6,37 @@ export class TestsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Тест урока — без вопросов, только счётчик (интро-экран). */
-  findLightByLessonOrder(order: number, publishedOnly: boolean) {
+  findLightByLessonOrder(courseProductId: string, order: number, publishedOnly: boolean) {
     return this.prisma.lessonTest.findFirst({
-      where: { lessonOrder: order, ...(publishedOnly ? { status: "published" as const } : {}) },
-      include: { _count: { select: { questions: true } } },
+      where: {
+        lesson: { courseProductId, order },
+        ...(publishedOnly ? { status: "published" as const } : {}),
+      },
+      include: { _count: { select: { questions: true } }, lesson: { select: { id: true, order: true } } },
     });
   }
 
   /** Тест урока с вопросами и вариантами — нужен для старта попытки/скоринга. */
-  findFullByLessonOrder(order: number, publishedOnly: boolean) {
+  findFullByLessonOrder(courseProductId: string, order: number, publishedOnly: boolean) {
     return this.prisma.lessonTest.findFirst({
-      where: { lessonOrder: order, ...(publishedOnly ? { status: "published" as const } : {}) },
-      include: { questions: { include: { options: true }, orderBy: { order: "asc" } } },
+      where: {
+        lesson: { courseProductId, order },
+        ...(publishedOnly ? { status: "published" as const } : {}),
+      },
+      include: {
+        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        lesson: { select: { id: true, order: true } },
+      },
     });
   }
 
   findFullById(testId: string) {
     return this.prisma.lessonTest.findUnique({
       where: { id: testId },
-      include: { questions: { include: { options: true }, orderBy: { order: "asc" } } },
+      include: {
+        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        lesson: { select: { id: true, order: true } },
+      },
     });
   }
 
@@ -38,7 +50,7 @@ export class TestsRepository {
 
   createAttempt(data: {
     testId: string;
-    lessonOrder: number;
+    lessonId: string;
     studentId: string;
     expiresAt: Date;
     totalQuestions: number;
@@ -46,7 +58,7 @@ export class TestsRepository {
     return this.prisma.testAttempt.create({
       data: {
         testId: data.testId,
-        lessonOrder: data.lessonOrder,
+        lessonId: data.lessonId,
         studentId: data.studentId,
         expiresAt: data.expiresAt,
         totalQuestions: data.totalQuestions,
@@ -72,21 +84,31 @@ export class TestsRepository {
     return this.prisma.student.findUniqueOrThrow({ where: { id: studentId } });
   }
 
-  findLessonCompletion(studentId: string, lessonOrder: number) {
+  findLessonCompletion(studentId: string, lessonId: string) {
     return this.prisma.studentLesson.findUnique({
-      where: { studentId_lessonOrder: { studentId, lessonOrder } },
+      where: { studentId_lessonId: { studentId, lessonId } },
     });
   }
 
   /* ---------- редактор теста (роль curator) ---------- */
 
-  findLessonByOrder(order: number) {
-    return this.prisma.lesson.findUnique({ where: { order } });
+  findLessonById(lessonId: string) {
+    return this.prisma.lesson.findUnique({ where: { id: lessonId } });
   }
 
-  createTest(data: { lessonOrder: number; title: string }) {
+  findFullByLessonId(lessonId: string) {
+    return this.prisma.lessonTest.findFirst({
+      where: { lessonId },
+      include: {
+        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        lesson: { select: { id: true, order: true } },
+      },
+    });
+  }
+
+  createTest(data: { lessonId: string; title: string }) {
     return this.prisma.lessonTest.create({
-      data: { lessonOrder: data.lessonOrder, title: data.title },
+      data: { lessonId: data.lessonId, title: data.title },
       include: { questions: { include: { options: true }, orderBy: { order: "asc" } } },
     });
   }
@@ -98,7 +120,10 @@ export class TestsRepository {
     return this.prisma.lessonTest.update({
       where: { id },
       data,
-      include: { questions: { include: { options: true }, orderBy: { order: "asc" } } },
+      include: {
+        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        lesson: { select: { id: true, order: true } },
+      },
     });
   }
 

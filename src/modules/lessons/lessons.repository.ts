@@ -5,38 +5,72 @@ import { PrismaService } from "../../infra/prisma/prisma.service";
 export class LessonsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAllOrdered() {
-    return this.prisma.lesson.findMany({ orderBy: { order: "asc" } });
+  findAllOrdered(courseProductId: string) {
+    return this.prisma.lesson.findMany({ where: { courseProductId }, orderBy: { order: "asc" } });
   }
 
-  findByOrder(order: number) {
-    return this.prisma.lesson.findUnique({ where: { order } });
+  findByOrder(courseProductId: string, order: number) {
+    return this.prisma.lesson.findUnique({ where: { courseProductId_order: { courseProductId, order } } });
   }
 
-  /** Заказы уроков, у которых есть хотя бы одна практика (BACKEND.md §12, `hasPractice`). */
-  async ordersWithPractice(): Promise<Set<number>> {
+  /** Наибольший `order` среди уроков продукта (0, если уроков ещё нет). */
+  async maxOrder(courseProductId: string): Promise<number> {
+    const row = await this.prisma.lesson.aggregate({
+      where: { courseProductId },
+      _max: { order: true },
+    });
+    return row._max.order ?? 0;
+  }
+
+  create(data: {
+    courseProductId: string;
+    order: number;
+    title: string;
+    description: string;
+    videoUrl: string;
+    duration: string;
+    block: string;
+  }) {
+    return this.prisma.lesson.create({ data });
+  }
+
+  /** Заказы уроков продукта, у которых есть хотя бы одна практика (BACKEND.md §12, `hasPractice`). */
+  async ordersWithPractice(courseProductId: string): Promise<Set<number>> {
     const rows = await this.prisma.meeting.findMany({
-      select: { lessonOrder: true },
-      distinct: ["lessonOrder"],
+      where: { lesson: { courseProductId } },
+      select: { lesson: { select: { order: true } } },
+      distinct: ["lessonId"],
     });
-    return new Set(rows.map((r) => r.lessonOrder));
+    return new Set(rows.map((r) => r.lesson.order));
   }
 
-  countOpened(order: number) {
-    return this.prisma.student.count({ where: { openedUpTo: { gte: order } } });
+  /** Студенты, реально относящиеся к этому продукту (через свою группу или язык+INDIVIDUAL), у которых открыт этот урок. */
+  countOpened(courseProductId: string, order: number, language: string, format: string) {
+    if (format === "INDIVIDUAL") {
+      return this.prisma.student.count({
+        where: { type: "INDIVIDUAL", language: language as never, openedUpTo: { gte: order } },
+      });
+    }
+    return this.prisma.student.count({
+      where: { group: { courseProductId }, openedUpTo: { gte: order } },
+    });
   }
 
-  countCompleted(order: number) {
-    return this.prisma.studentLesson.count({ where: { lessonOrder: order, completedAt: { not: null } } });
+  countCompleted(lessonId: string) {
+    return this.prisma.studentLesson.count({ where: { lessonId, completedAt: { not: null } } });
   }
 
-  countInProgress(order: number) {
+  countInProgress(lessonId: string) {
     return this.prisma.studentLesson.count({
-      where: { lessonOrder: order, completedAt: null, watchedPct: { gt: 0 } },
+      where: { lessonId, completedAt: null, watchedPct: { gt: 0 } },
     });
   }
 
-  update(order: number, data: { title?: string; description?: string; videoUrl?: string }) {
-    return this.prisma.lesson.update({ where: { order }, data });
+  update(
+    courseProductId: string,
+    order: number,
+    data: { title?: string; description?: string; videoUrl?: string },
+  ) {
+    return this.prisma.lesson.update({ where: { courseProductId_order: { courseProductId, order } }, data });
   }
 }

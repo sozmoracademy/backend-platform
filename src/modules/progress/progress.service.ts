@@ -1,24 +1,33 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { GroupsService } from "../groups/groups.service";
+import { CourseResolverService } from "../courses/course-resolver.service";
 import type { GroupSummaryDto } from "../groups/dto/group.dto";
-
-const LESSON_COUNT = 54;
 
 /**
  * `progress` — потабличное открытие уроков по группе, одной транзакцией
- * (BACKEND.md §7.1, TЗ инвариант 3).
+ * (BACKEND.md §7.1, TЗ инвариант 3). `order` валидируется против количества уроков
+ * продукта конкретной группы (у каждого продукта — свой набор уроков).
  */
 @Injectable()
 export class ProgressService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly groups: GroupsService,
+    private readonly resolver: CourseResolverService,
   ) {}
+
+  private async lessonCountFor(groupId: string): Promise<{ courseProductId: string; lessonCount: number }> {
+    const group = await this.prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) throw new NotFoundException("Группа не найдена");
+    const lessonCount = await this.resolver.countLessons(group.courseProductId);
+    return { courseProductId: group.courseProductId, lessonCount };
+  }
 
   /** Открыть урок N → у активных учеников группы с `openedUpTo < N` ставится `openedUpTo = N`. */
   async publishForGroup(groupId: string, order: number): Promise<GroupSummaryDto> {
-    if (order < 1 || order > LESSON_COUNT) throw new BadRequestException("Некорректный номер урока");
+    const { lessonCount } = await this.lessonCountFor(groupId);
+    if (order < 1 || order > lessonCount) throw new BadRequestException("Некорректный номер урока");
 
     await this.prisma.$transaction(async (tx) => {
       const group = await tx.group.findUnique({ where: { id: groupId } });
@@ -39,7 +48,8 @@ export class ProgressService {
 
   /** Закрыть урок N → у учеников группы с `openedUpTo >= N` ставится `openedUpTo = N-1`. */
   async unpublishForGroup(groupId: string, order: number): Promise<GroupSummaryDto> {
-    if (order < 1 || order > LESSON_COUNT) throw new BadRequestException("Некорректный номер урока");
+    const { lessonCount } = await this.lessonCountFor(groupId);
+    if (order < 1 || order > lessonCount) throw new BadRequestException("Некорректный номер урока");
 
     await this.prisma.$transaction(async (tx) => {
       const group = await tx.group.findUnique({ where: { id: groupId } });

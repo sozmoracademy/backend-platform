@@ -1,17 +1,22 @@
-// Копия программы курса из english-flow/src/lib/mock-data.ts (BACKEND.md §13) —
-// 54 урока, 6 блоков программы, 4 продукта (EN/RU × Group/Individual). Единственный
-// источник контента для `prisma/seed.ts`.
+// Копия программы курса из english-flow/src/lib/mock-data.ts (BACKEND.md §13), расширенная
+// до 6 продуктов (EN/RU × Group-3мес/Group-6мес/Individual-1мес), каждый со своим набором
+// уроков. Group-3мес — ровно первая половина Group-6мес (первые 3 блока программы:
+// Foundation/A1, Grammar Core/A2, Past & Future/B1). Individual — самостоятельный набор,
+// не связан с Group. Единственный источник контента для `prisma/seed.ts`.
 
 export type CefrLevel = "A1" | "A2" | "B1" | "B2";
 
 export interface SeedLesson {
+  courseProductId: string;
   order: number;
   title: string;
   description: string;
   block: string;
 }
 
-const titles: [string, string, string][] = [
+// 54 темы группового курса (общие для EN/RU-групп — как и раньше, контент не различается
+// по языку обучения, это демо-плейсхолдер).
+const GROUP_TITLES: [string, string, string][] = [
   ["Знакомство и алфавит", "Greetings, the alphabet and first phrases", "Foundation"],
   ["Verb to be", "Am / is / are в утверждении и отрицании", "Foundation"],
   ["Личные местоимения", "I, you, he, she, it, we, they", "Foundation"],
@@ -68,18 +73,47 @@ const titles: [string, string, string][] = [
   ["Финальный разбор", "Итоговая практика курса", "Speaking"],
 ];
 
+// TODO(content): заглушка — точное количество и содержание уроков для Individual
+// (1 месяц, полностью отдельная программа) уточнить отдельно. Пока ~12 интенсивных тем.
+const INDIVIDUAL_TITLES: [string, string, string][] = [
+  ["Стартовая диагностика", "Оценка уровня и постановка цели курса", "Intensive"],
+  ["Разговорный минимум", "Ключевые фразы для первого разговора", "Intensive"],
+  ["Грамматический каркас", "Базовые конструкции для быстрого старта", "Intensive"],
+  ["Повседневная лексика", "Слова и фразы на каждый день", "Intensive"],
+  ["Практика диалога 1", "Отработка живого диалога с преподавателем", "Intensive"],
+  ["Работа и профессии", "Лексика для рабочих ситуаций", "Intensive"],
+  ["Практика диалога 2", "Усложнённые повседневные ситуации", "Intensive"],
+  ["Свободное время", "Разговор о хобби и планах", "Intensive"],
+  ["Деловое общение", "Email и короткие созвоны", "Intensive"],
+  ["Практика диалога 3", "Импровизация без подготовки", "Intensive"],
+  ["Итоговое ускорение", "Разбор ошибок и точечная доработка", "Intensive"],
+  ["Финальная практика", "Итоговый разговор с преподавателем", "Intensive"],
+];
+
 const DEFAULT_VIDEO_URL = "/Video%20Project%201.mp4";
 
-export const LESSONS: (SeedLesson & { videoUrl: string; duration: string })[] = titles.map(
-  ([title, description, block], i) => ({
+function lessonsFor(courseProductId: string, titles: [string, string, string][]): SeedLesson[] {
+  return titles.map(([title, description, block], i) => ({
+    courseProductId,
     order: i + 1,
     title,
     description,
     block,
-    videoUrl: DEFAULT_VIDEO_URL,
-    duration: `${10 + ((i * 7) % 12)}:${String((i * 13) % 60).padStart(2, "0")}`,
-  }),
-);
+  }));
+}
+
+export const LESSONS: (SeedLesson & { videoUrl: string; duration: string })[] = [
+  ...lessonsFor("en-group-6mo", GROUP_TITLES),
+  ...lessonsFor("en-group-3mo", GROUP_TITLES.slice(0, 27)),
+  ...lessonsFor("ru-group-6mo", GROUP_TITLES),
+  ...lessonsFor("ru-group-3mo", GROUP_TITLES.slice(0, 27)),
+  ...lessonsFor("en-individual-1mo", INDIVIDUAL_TITLES),
+  ...lessonsFor("ru-individual-1mo", INDIVIDUAL_TITLES),
+].map((lesson, i) => ({
+  ...lesson,
+  videoUrl: DEFAULT_VIDEO_URL,
+  duration: `${10 + ((i * 7) % 12)}:${String((i * 13) % 60).padStart(2, "0")}`,
+}));
 
 export interface SeedCourseBlock {
   name: string;
@@ -95,9 +129,11 @@ export const COURSE_BLOCKS: SeedCourseBlock[] = [
   { name: "Vocabulary", level: "B1", month: 4, title: "Vocabulary & Life" },
   { name: "Advanced Grammar", level: "B2", month: 5, title: "Advanced Grammar" },
   { name: "Speaking", level: "B2", month: 6, title: "Speaking & Fluency" },
+  // Individual — отдельная, не привязанная к месяцам-уровням программа.
+  { name: "Intensive", level: "A1", month: 1, title: "Intensive" },
 ];
 
-const DEFAULT_LEVEL_PLAN: { month: number; level: CefrLevel }[] = [
+const GROUP_6MO_LEVEL_PLAN: { month: number; level: CefrLevel }[] = [
   { month: 1, level: "A1" },
   { month: 2, level: "A2" },
   { month: 3, level: "B1" },
@@ -106,7 +142,12 @@ const DEFAULT_LEVEL_PLAN: { month: number; level: CefrLevel }[] = [
   { month: 6, level: "B2" },
 ];
 
+const GROUP_3MO_LEVEL_PLAN: { month: number; level: CefrLevel }[] = GROUP_6MO_LEVEL_PLAN.slice(0, 3);
+
+const INDIVIDUAL_LEVEL_PLAN: { month: number; level: CefrLevel }[] = [{ month: 1, level: "A1" }];
+
 export interface SeedCourseProduct {
+  id: string;
   language: "en" | "ru";
   format: "GROUP" | "INDIVIDUAL";
   title: string;
@@ -119,43 +160,88 @@ export interface SeedCourseProduct {
 
 export const COURSE_PRODUCTS: SeedCourseProduct[] = [
   {
+    id: "en-group-6mo",
     language: "en",
     format: "GROUP",
-    title: "English Group",
+    title: "English Group · 6 месяцев",
     durationMonths: 6,
     price: 15000,
     currency: "сом",
     features: ["Теория", "Тесты", "Повторение", "Групповая практика", "Преподаватель", "Google Meet"],
-    levelPlan: DEFAULT_LEVEL_PLAN,
+    levelPlan: GROUP_6MO_LEVEL_PLAN,
   },
   {
+    id: "en-group-3mo",
+    language: "en",
+    format: "GROUP",
+    title: "English Group · 3 месяца",
+    durationMonths: 3,
+    price: 9000,
+    currency: "сом",
+    features: ["Теория", "Тесты", "Повторение", "Групповая практика", "Преподаватель", "Google Meet"],
+    levelPlan: GROUP_3MO_LEVEL_PLAN,
+  },
+  {
+    id: "ru-group-6mo",
     language: "ru",
     format: "GROUP",
-    title: "Russian Group",
+    title: "Russian Group · 6 месяцев",
     durationMonths: 6,
     price: 12000,
     currency: "сом",
     features: ["Теория", "Тесты", "Повторение", "Групповая практика", "Преподаватель", "Google Meet"],
-    levelPlan: DEFAULT_LEVEL_PLAN,
+    levelPlan: GROUP_6MO_LEVEL_PLAN,
   },
   {
+    id: "ru-group-3mo",
+    language: "ru",
+    format: "GROUP",
+    title: "Russian Group · 3 месяца",
+    durationMonths: 3,
+    price: 7500,
+    currency: "сом",
+    features: ["Теория", "Тесты", "Повторение", "Групповая практика", "Преподаватель", "Google Meet"],
+    levelPlan: GROUP_3MO_LEVEL_PLAN,
+  },
+  {
+    id: "en-individual-1mo",
     language: "en",
     format: "INDIVIDUAL",
     title: "English Individual",
     durationMonths: 1,
     price: 20000,
     currency: "сом",
-    features: ["Индивидуальная практика с преподавателем", "Та же теория, что в English Group"],
-    levelPlan: DEFAULT_LEVEL_PLAN,
+    features: ["Индивидуальная практика с преподавателем", "Отдельная интенсивная программа"],
+    levelPlan: INDIVIDUAL_LEVEL_PLAN,
   },
   {
+    id: "ru-individual-1mo",
     language: "ru",
     format: "INDIVIDUAL",
     title: "Russian Individual",
     durationMonths: 1,
     price: 20000,
     currency: "сом",
-    features: ["Индивидуальная практика с преподавателем", "Та же теория, что в Russian Group"],
-    levelPlan: DEFAULT_LEVEL_PLAN,
+    features: ["Индивидуальная практика с преподавателем", "Отдельная интенсивная программа"],
+    levelPlan: INDIVIDUAL_LEVEL_PLAN,
   },
 ];
+
+/** Резолвит id продукта по языку+формату(+длительности для GROUP). */
+export function productIdFor(
+  language: "en" | "ru",
+  format: "GROUP" | "INDIVIDUAL",
+  durationMonths: number,
+): string {
+  const product = COURSE_PRODUCTS.find(
+    (p) => p.language === language && p.format === format && p.durationMonths === durationMonths,
+  );
+  if (!product) {
+    throw new Error(`Не найден CourseProduct для ${language}/${format}/${durationMonths}мес`);
+  }
+  return product.id;
+}
+
+export function lessonIdKey(courseProductId: string, order: number): string {
+  return `${courseProductId}#${order}`;
+}

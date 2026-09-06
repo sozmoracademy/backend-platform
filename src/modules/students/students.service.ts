@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Student } from "@prisma/client";
+import type { CourseProduct, Student } from "@prisma/client";
 import { StudentsRepository, PAGE_SIZE, type StudentsFilter } from "./students.repository";
 import { UsersService } from "../users/users.service";
+import { CourseResolverService } from "../courses/course-resolver.service";
 import {
+  bestAttemptOf,
   currentLessonOrder,
   daysLeft,
   effectiveAccessStatus,
@@ -14,6 +16,7 @@ import {
   monthOfLesson,
   practiceStats,
   progressPercent,
+  testClearedOrders,
   testsStats,
   todayInTz,
   type AttemptLike,
@@ -42,6 +45,7 @@ export class StudentsService {
     private readonly repo: StudentsRepository,
     private readonly users: UsersService,
     private readonly config: ConfigService,
+    private readonly resolver: CourseResolverService,
   ) {}
 
   private today(): string {
@@ -50,6 +54,15 @@ export class StudentsService {
 
   private toDateStr(d: Date): string {
     return d.toISOString().slice(0, 10);
+  }
+
+  /** Резолвит продукт студента (GROUP — через его группу, INDIVIDUAL — язык). */
+  private productFor(student: {
+    language: Student["language"];
+    type: Student["type"];
+    groupId: string | null;
+  }) {
+    return this.resolver.forStudent(student);
   }
 
   private accessStatusOf(student: { status: Student["status"]; endDate: Date }, today: string) {
@@ -75,17 +88,29 @@ export class StudentsService {
     const page = query.page ?? 1;
     const { items, total } = await this.repo.findPage(filter, page, new Date(`${today}T00:00:00.000Z`));
 
-    const productCache = new Map<string, Awaited<ReturnType<StudentsRepository["findCourseProduct"]>>>();
-    const productFor = async (language: Student["language"], type: Student["type"]) => {
-      const key = `${language}:${type}`;
-      if (!productCache.has(key)) productCache.set(key, await this.repo.findCourseProduct(language, type));
+    const productCache = new Map<string, CourseProduct>();
+    const lessonCountCache = new Map<string, number>();
+    const productFor = async (s: {
+      language: Student["language"];
+      type: Student["type"];
+      groupId: string | null;
+    }) => {
+      const key = s.type === "INDIVIDUAL" ? `ind:${s.language}` : `grp:${s.groupId}`;
+      if (!productCache.has(key)) productCache.set(key, await this.resolver.forStudent(s));
       return productCache.get(key)!;
+    };
+    const lessonCountFor = async (courseProductId: string) => {
+      if (!lessonCountCache.has(courseProductId)) {
+        lessonCountCache.set(courseProductId, await this.resolver.countLessons(courseProductId));
+      }
+      return lessonCountCache.get(courseProductId)!;
     };
 
     const mapped = await Promise.all(
       items.map(async (s) => {
-        const product = await productFor(s.language, s.type);
-        const completedOrders = new Set(s.lessons.map((l) => l.lessonOrder));
+        const product = await productFor(s);
+        const lessonsTotal = await lessonCountFor(product.id);
+        const completedOrders = new Set(s.lessons.map((l) => l.lesson.order));
         const payment = s.payment;
         return {
           id: s.id,
@@ -102,8 +127,8 @@ export class StudentsService {
           startDate: this.toDateStr(s.startDate),
           endDate: this.toDateStr(s.endDate),
           currentLessonOrder: currentLessonOrder(s.openedUpTo, completedOrders),
-          lessonsTotal: 54,
-          progressPct: progressPercent(completedOrders.size, 54),
+          lessonsTotal,
+          progressPct: progressPercent(completedOrders.size, lessonsTotal),
           payment: payment
             ? {
                 status: this.paymentStatus(payment.paid, payment.totalCost),
@@ -134,9 +159,6 @@ export class StudentsService {
     if (await this.repo.loginExists(body.login)) {
       throw new BadRequestException("Такой логин уже есть в базе — измените");
     }
-    const product = await this.repo.findCourseProduct(body.language, body.type);
-    if (!product) throw new BadRequestException("Продукт не найден");
-
     let group = body.groupId ? await this.repo.findGroupById(body.groupId) : null;
     if (body.type === "GROUP" && !group) {
       const candidates = await this.repo.findMatchingGroupCandidates(
@@ -160,17 +182,27 @@ export class StudentsService {
       group = match ? await this.repo.findGroupById(match.id) : null;
     }
 
+    const product =
+      body.type === "INDIVIDUAL"
+        ? await this.resolver.forIndividual(body.language)
+        : group
+          ? await this.resolver.forGroup(group.courseProductId)
+          : null;
+    if (!product) throw new BadRequestException("Не найдена группа для зачисления — укажите группу");
+
     const start = group ? group.startDate : new Date(`${body.startDate}T00:00:00.000Z`);
     const end = new Date(start);
     end.setMonth(end.getMonth() + product.durationMonths);
     const total = body.total ?? product.price;
     const paid = body.paid ?? 0;
 
+    // Пароль приходит с формы (клиентский предпросмотр, как в референсе). Если он
+    // почему-то пуст — генерируем на сервере, чтобы учётка не осталась без пароля.
     // `generatePassword`'s "уникальный по базе" (BACKEND.md §6) относится к мок-хранилищу
     // паролей в открытом виде; здесь пароли — только bcrypt-хеши, сверить их с новым
     // паролем в открытом виде нельзя (и не нужно: коллизия пароля между разными логинами
     // не создаёт уязвимости — учётную запись всегда разделяет уникальный login).
-    const plainPassword = generatePassword(new Set());
+    const plainPassword = body.password?.trim() || generatePassword(new Set());
 
     const user = await this.repo.createUser({
       login: body.login,
@@ -222,6 +254,8 @@ export class StudentsService {
   async header(id: string): Promise<StudentHeaderDto> {
     const student = await this.loadOrThrow(id);
     const today = this.today();
+    const product = await this.productFor(student);
+    const lessonsTotal = await this.resolver.countLessons(product.id);
     const completed = await this.repo.findCompletedOrders(id);
     const completedOrders = new Set(completed.map((l) => l.lessonOrder));
     const meetings = await this.repo.findMeetingsFor(student);
@@ -241,8 +275,8 @@ export class StudentsService {
       lastActivity: this.toDateStr(student.lastActivity),
       currentLessonOrder: currentLessonOrder(student.openedUpTo, completedOrders),
       openedUpTo: student.openedUpTo,
-      lessonsTotal: 54,
-      progressPct: progressPercent(completedOrders.size, 54),
+      lessonsTotal,
+      progressPct: progressPercent(completedOrders.size, lessonsTotal),
       onboarded: student.onboarded,
       ...(nextMeeting
         ? { nextMeeting: { date: this.toDateStr(nextMeeting.date), startTime: nextMeeting.startTime } }
@@ -252,7 +286,7 @@ export class StudentsService {
 
   async overview(id: string): Promise<StudentOverviewDto> {
     const student = await this.loadOrThrow(id);
-    const product = await this.repo.findCourseProduct(student.language, student.type);
+    const product = await this.productFor(student);
     const payment = student.payment;
 
     return {
@@ -294,10 +328,11 @@ export class StudentsService {
     const completed = await this.repo.findCompletedOrders(id);
     const completedOrders = new Set(completed.map((l) => l.lessonOrder));
     const order = currentLessonOrder(student.openedUpTo, completedOrders);
-    const product = await this.repo.findCourseProduct(student.language, student.type);
-    const levelPlan = (product?.levelPlan as unknown as LevelPlanEntry[]) ?? [];
+    const product = await this.productFor(student);
+    const levelPlan = (product.levelPlan as unknown as LevelPlanEntry[]) ?? [];
+    const lessonCount = await this.resolver.countLessons(product.id);
 
-    const tests = await this.repo.findTestsWithQuestionCount();
+    const tests = await this.repo.findTestsWithQuestionCount(product.id);
     const attempts = await this.repo.findAttemptsForStudent(id);
     const testIdByLessonOrder = new Map(tests.map((t) => [t.lessonOrder, t.id]));
     const attemptsByTest = new Map<string, AttemptLike[]>();
@@ -313,21 +348,47 @@ export class StudentsService {
       testIdByLessonOrder,
     });
 
-    const allLessons = await this.repo.findAllLessonsLight();
+    const allLessons = await this.repo.findAllLessonsLight(product.id);
+
+    // Тест-гейт (ТЗ инвариант 4): для состояния уроков нужен набор «зачтённых» тестов.
+    const orderByTestId = new Map(tests.map((t) => [t.id, t.lessonOrder]));
+    const clearedOrders = testClearedOrders(
+      allLessons.map((l) => l.order),
+      tests,
+      attempts.map((a) => ({
+        lessonOrder: orderByTestId.get(a.testId) ?? -1,
+        status: a.status,
+        expiresAt: a.expiresAt.toISOString(),
+        score: a.score,
+        passed: a.passed,
+      })),
+    );
 
     return {
-      level: levelForLesson(levelPlan, order) as CefrLevel,
-      month: monthOfLesson(order),
+      level: levelForLesson(levelPlan, order, lessonCount, product.durationMonths) as CefrLevel,
+      month: monthOfLesson(order, lessonCount, product.durationMonths),
       currentLessonOrder: order,
       openedUpTo: student.openedUpTo,
       completedCount: completedOrders.size,
       testsPassed: ts.passed,
       testsTotal: ts.total,
-      lessons: allLessons.map((l) => ({
-        order: l.order,
-        title: l.title,
-        state: lessonState(student.openedUpTo, completedOrders, l.order),
-      })),
+      lessons: allLessons.map((l) => {
+        const t = tests.find((x) => x.lessonOrder === l.order);
+        const best = t ? bestAttemptOf(attemptsByTest.get(t.id) ?? []) : null;
+        return {
+          order: l.order,
+          title: l.title,
+          state: lessonState(student.openedUpTo, completedOrders, clearedOrders, l.order),
+          test: t
+            ? {
+                published: t.status === "published",
+                bestScore: best?.score ?? null,
+                passed: best?.passed ?? null,
+                passingScore: t.passingScore,
+              }
+            : null,
+        };
+      }),
     };
   }
 
@@ -360,12 +421,14 @@ export class StudentsService {
   async progress(id: string): Promise<StudentProgressDto> {
     const student = await this.loadOrThrow(id);
     const today = this.today();
+    const product = await this.productFor(student);
+    const lessonsTotal = await this.resolver.countLessons(product.id);
     const completed = await this.repo.findCompletedOrders(id);
     const completedOrders = new Set(completed.map((l) => l.lessonOrder));
     const meetings = await this.repo.findMeetingsFor(student);
     const ps = practiceStats(meetings);
 
-    const tests = await this.repo.findTestsWithQuestionCount();
+    const tests = await this.repo.findTestsWithQuestionCount(product.id);
     const attempts = await this.repo.findAttemptsForStudent(id);
     const testIdByLessonOrder = new Map(tests.map((t) => [t.lessonOrder, t.id]));
     const attemptsByTest = new Map<string, AttemptLike[]>();
@@ -383,8 +446,8 @@ export class StudentsService {
 
     return {
       completedCount: completedOrders.size,
-      lessonsTotal: 54,
-      progressPct: progressPercent(completedOrders.size, 54),
+      lessonsTotal,
+      progressPct: progressPercent(completedOrders.size, lessonsTotal),
       testsPassed: ts.passed,
       testsTotal: ts.total,
       practiceAttended: ps.attended,
@@ -447,6 +510,9 @@ export class StudentsService {
   async openLesson(id: string, order: number): Promise<StudentHeaderDto> {
     const student = await this.loadOrThrow(id);
     if (student.type !== "INDIVIDUAL") throw new BadRequestException("Доступно только для Individual");
+    const product = await this.resolver.forIndividual(student.language);
+    const lessonCount = await this.resolver.countLessons(product.id);
+    if (order < 1 || order > lessonCount) throw new BadRequestException("Некорректный номер урока");
     await this.repo.updateOpenedUpTo(id, order);
     return this.header(id);
   }

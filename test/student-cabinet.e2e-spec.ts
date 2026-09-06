@@ -49,9 +49,32 @@ describe("student-cabinet (e2e)", () => {
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
     expect(res.body).toHaveLength(54);
-    expect(res.body.find((l: { order: number }) => l.order === 1).state).toBe("completed");
-    expect(res.body.find((l: { order: number }) => l.order === 1).test).toBeDefined();
-    expect(res.body.find((l: { order: number }) => l.order === 54).state).toBe("locked");
+    const byOrder = (o: number) => res.body.find((l: { order: number }) => l.order === o);
+    expect(byOrder(1).state).toBe("completed");
+    expect(byOrder(1).test).toBeDefined();
+    // kanat завершил 1,2 и сдал тест урока 1 -> фронтир = урок 3; урок 4 закрыт до завершения 3
+    expect(byOrder(3).state).toBe("available");
+    expect(byOrder(4).state).toBe("locked");
+    expect(byOrder(54).state).toBe("locked");
+  });
+
+  it("тест-гейт: непройденный тест урока 1 закрывает следующий урок у alina", async () => {
+    const token = await loginAs(app, "alina");
+    const lessons = await request(app.getHttpServer())
+      .get("/me/lessons")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+    const byOrder = (o: number) => lessons.body.find((l: { order: number }) => l.order === o);
+    // alina завершила уроки 1–3, но тест урока 1 не сдан -> урок 4 закрыт
+    expect(byOrder(3).state).toBe("completed");
+    expect(byOrder(4).state).toBe("locked");
+
+    // прямой watch по закрытому гейтом уроку отклоняется
+    await request(app.getHttpServer())
+      .post("/me/lessons/4/watch")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ pct: 95 })
+      .expect(403);
   });
 
   it("GET /me/lessons/:order — 404 для несуществующего урока", async () => {

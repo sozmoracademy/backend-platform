@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiExtraModels, ApiProperty, getSchemaPath } from "@nestjs/swagger";
 import { IsInt, Max, Min } from "class-validator";
 import type { CourseType, Lang, MeetingStatus } from "@prisma/client";
 import type { CefrLevel, LessonState, StageStatus, TestAvailability } from "../../../common/domain";
@@ -84,16 +84,37 @@ export class NextStepTestPreviewDto {
   @ApiProperty() minutes!: number;
 }
 
-/** Один и тот же JSON, что и дискриминированный union фронта (BACKEND.md §12 `NextStepDto`) —
- * поля, не относящиеся к `kind`, просто отсутствуют. */
-export class NextStepDto {
-  @ApiProperty({ enum: ["lesson", "test", "practice", "done"] }) kind!:
-    "lesson" | "test" | "practice" | "done";
-  @ApiProperty({ type: LessonSummaryDto, required: false }) lesson?: LessonSummaryDto;
-  @ApiProperty({ type: NextStepTestPreviewDto, required: false }) test?: NextStepTestPreviewDto;
-  @ApiProperty({ type: MeetingSummaryDto, required: false }) meeting?: MeetingSummaryDto;
+/**
+ * `nextStep` — дискриминированный union по `kind` (BACKEND.md §12). Описан
+ * вариантами + `oneOf` на `MeDashboardDto.nextStep`, чтобы `openapi-typescript`
+ * во фронте выдал сужаемый по `kind` тип (а не плоский объект с optional-полями).
+ */
+export class NextStepLessonDto {
+  @ApiProperty({ enum: ["lesson"] }) kind!: "lesson";
+  @ApiProperty({ type: LessonSummaryDto }) lesson!: LessonSummaryDto;
+}
+export class NextStepTestDto {
+  @ApiProperty({ enum: ["test"] }) kind!: "test";
+  @ApiProperty({ type: LessonSummaryDto }) lesson!: LessonSummaryDto;
+  @ApiProperty({ type: NextStepTestPreviewDto }) test!: NextStepTestPreviewDto;
+}
+export class NextStepPracticeDto {
+  @ApiProperty({ enum: ["practice"] }) kind!: "practice";
+  @ApiProperty({ type: MeetingSummaryDto }) meeting!: MeetingSummaryDto;
+}
+export class NextStepDoneDto {
+  @ApiProperty({ enum: ["done"] }) kind!: "done";
   @ApiProperty({ type: MeetingSummaryDto, required: false }) nextMeeting?: MeetingSummaryDto;
 }
+
+export type NextStepDto = NextStepLessonDto | NextStepTestDto | NextStepPracticeDto | NextStepDoneDto;
+
+const NEXT_STEP_VARIANTS = [
+  NextStepLessonDto,
+  NextStepTestDto,
+  NextStepPracticeDto,
+  NextStepDoneDto,
+] as const;
 
 export class LevelStatusDto {
   @ApiProperty({ enum: ["A1", "A2", "B1", "B2"] }) level!: CefrLevel;
@@ -111,6 +132,7 @@ export class DashboardProgressDto {
   @ApiProperty({ type: [LevelStatusDto] }) levels!: LevelStatusDto[];
 }
 
+@ApiExtraModels(...NEXT_STEP_VARIANTS)
 export class MeDashboardDto {
   @ApiProperty() firstName!: string;
   @ApiProperty({ enum: ["GROUP", "INDIVIDUAL"] }) courseType!: CourseType;
@@ -118,7 +140,8 @@ export class MeDashboardDto {
   @ApiProperty({ type: AccessInfoDto }) access!: AccessInfoDto;
   @ApiProperty({ type: [WeekAgendaDayDto] }) week!: WeekAgendaDayDto[];
   @ApiProperty({ type: LessonSummaryDto, nullable: true }) currentLesson!: LessonSummaryDto | null;
-  @ApiProperty({ type: NextStepDto }) nextStep!: NextStepDto;
+  @ApiProperty({ oneOf: NEXT_STEP_VARIANTS.map((v) => ({ $ref: getSchemaPath(v) })) })
+  nextStep!: NextStepDto;
   @ApiProperty({ type: [MeetingSummaryDto] }) meetings!: MeetingSummaryDto[];
   @ApiProperty({ type: DashboardProgressDto }) progress!: DashboardProgressDto;
 }
@@ -149,6 +172,8 @@ export class MeScheduleDayDto {
   @ApiProperty() topic!: string;
   @ApiProperty() meta!: string;
   @ApiProperty({ required: false }) meetUrl?: string;
+  /** Время начала практики "HH:mm" — для окна подключения на клиенте. */
+  @ApiProperty({ required: false }) startTime?: string;
   @ApiProperty({ required: false }) lessonOrder?: number;
 }
 

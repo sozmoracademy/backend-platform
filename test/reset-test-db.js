@@ -5,10 +5,15 @@
 // `deleteMany` через Prisma Client, транзакционно, в порядке зависимостей FK;
 // действует только на `DATABASE_URL`, переданный этому процессу (тестовая БД
 // sozmor_test, см. .env.test — никогда не БД разработки/прод).
+const { PrismaPg } = require("@prisma/adapter-pg");
 const { PrismaClient } = require("@prisma/client");
 
 async function main() {
-  const prisma = new PrismaClient();
+  // Prisma 7: рантайм-клиенту нужен driver adapter. DATABASE_URL приходит из
+  // окружения процесса (test/global-setup.js грузит .env.test и прокидывает его).
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
   try {
     await prisma.$transaction([
       prisma.meetingAttendance.deleteMany(),

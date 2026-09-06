@@ -49,6 +49,29 @@ describe("meetings (e2e)", () => {
     expect(res.body.roster.length).toBeGreaterThan(0);
   });
 
+  it("POST /groups/:id/meetings — узкая форма: scope GROUP, время из группы", async () => {
+    const group = await prisma.group.findFirstOrThrow({ where: { code: "EN-02" } });
+    const res = await request(app.getHttpServer())
+      .post(`/groups/${group.id}/meetings`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ date: "2026-12-04", meetUrl: "https://meet.google.com/grp" })
+      .expect(201);
+    expect(res.body.scope).toBe("GROUP");
+    expect(res.body.groupId).toBe(group.id);
+    expect(res.body.startTime).toBe(group.practiceStart);
+    expect(res.body.meetUrl).toBe("https://meet.google.com/grp");
+    expect(res.body.roster.length).toBeGreaterThan(0);
+  });
+
+  it("POST /groups/:id/meetings — без ссылки в группе и в теле → 400", async () => {
+    const group = await prisma.group.findFirstOrThrow({ where: { meetUrl: "" } });
+    await request(app.getHttpServer())
+      .post(`/groups/${group.id}/meetings`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .send({ date: "2026-12-04" })
+      .expect(400);
+  });
+
   it("PATCH /meetings/:id — смена статуса на completed", async () => {
     const created = await request(app.getHttpServer())
       .post("/meetings")

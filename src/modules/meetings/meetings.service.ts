@@ -11,10 +11,12 @@ import {
   type LevelPlanEntry,
 } from "../../common/domain";
 import { PrismaService } from "../../infra/prisma/prisma.service";
+import { CourseResolverService } from "../courses/course-resolver.service";
 import {
   CreateMeetingRequestDto,
   MarkAttendanceRequestDto,
   MeetingsQueryDto,
+  ScheduleGroupMeetingRequestDto,
   ScheduleMeetingDto,
   UpdateMeetingRequestDto,
 } from "./dto/meeting.dto";
@@ -23,6 +25,7 @@ type MeetingFull = Meeting & {
   group: { id: string; name: string; teacherId: string | null } | null;
   student: { id: string; firstName: string; lastName: string; teacherId: string | null } | null;
   attendance: { studentId: string }[];
+  lesson: { order: number };
 };
 
 @Injectable()
@@ -31,6 +34,7 @@ export class MeetingsService {
     private readonly repo: MeetingsRepository,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly resolver: CourseResolverService,
   ) {}
 
   private today(): string {
@@ -73,7 +77,7 @@ export class MeetingsService {
 
     return {
       id: m.id,
-      lessonOrder: m.lessonOrder,
+      lessonOrder: m.lesson.order,
       scope: m.scope,
       groupId: m.groupId,
       groupName: m.group?.name ?? null,
@@ -107,13 +111,6 @@ export class MeetingsService {
     return Promise.all(rows.map((m) => this.toDto(m)));
   }
 
-  private async levelPlanFor(language: "en" | "ru"): Promise<LevelPlanEntry[]> {
-    const product = await this.prisma.courseProduct.findUnique({
-      where: { language_format: { language, format: "GROUP" } },
-    });
-    return (product?.levelPlan as unknown as LevelPlanEntry[]) ?? [];
-  }
-
   async create(body: CreateMeetingRequestDto): Promise<ScheduleMeetingDto> {
     if (body.scope === "GROUP") {
       const group = body.groupId ? await this.repo.findGroupById(body.groupId) : null;
@@ -121,18 +118,21 @@ export class MeetingsService {
       const meetUrl = body.meetUrl || group.meetUrl;
       if (!meetUrl) throw new BadRequestException("Добавьте ссылку Google Meet (в группе или в форме)");
 
-      const levelPlan = await this.levelPlanFor(group.language);
-      const stage = groupStage(group.currentLesson, levelPlan);
-      const lesson = await this.repo.findLessonByOrder(group.currentLesson);
+      const product = await this.resolver.forGroup(group.courseProductId);
+      const levelPlan = (product.levelPlan as unknown as LevelPlanEntry[]) ?? [];
+      const lessonCount = await this.resolver.countLessons(group.courseProductId);
+      const stage = groupStage(group.currentLesson, levelPlan, lessonCount, product.durationMonths);
+      const lesson = await this.repo.findLessonByOrder(group.courseProductId, group.currentLesson);
       const [h, min] = group.practiceStart.split(":");
       const endTime =
         body.endTime || group.practiceEnd || `${String((Number(h) + 1) % 24).padStart(2, "0")}:${min}`;
 
+      if (!lesson) throw new BadRequestException("Урок текущего этапа группы не найден");
       const meeting = await this.repo.createMeeting({
-        lesson: { connect: { order: group.currentLesson } },
+        lesson: { connect: { id: lesson.id } },
         scope: "GROUP",
         group: { connect: { id: group.id } },
-        title: `Практика: ${lesson?.title ?? stage.lesson}`,
+        title: `Практика: ${lesson.title ?? stage.lesson}`,
         date: this.toDate(body.date),
         startTime: body.startTime || group.practiceStart,
         endTime,
@@ -147,18 +147,20 @@ export class MeetingsService {
     if (!body.startTime || !body.endTime) throw new BadRequestException("Укажите время практики");
     if (!body.meetUrl) throw new BadRequestException("Добавьте ссылку Google Meet");
 
+    const product = await this.resolver.forIndividual(student.language);
     const completed = await this.prisma.studentLesson.findMany({
-      where: { studentId: student.id, completedAt: { not: null } },
-      select: { lessonOrder: true },
+      where: { studentId: student.id, completedAt: { not: null }, lesson: { courseProductId: product.id } },
+      select: { lesson: { select: { order: true } } },
     });
-    const order = currentLessonOrder(student.openedUpTo, new Set(completed.map((c) => c.lessonOrder)));
-    const lesson = await this.repo.findLessonByOrder(order);
+    const order = currentLessonOrder(student.openedUpTo, new Set(completed.map((c) => c.lesson.order)));
+    const lesson = await this.repo.findLessonByOrder(product.id, order);
+    if (!lesson) throw new BadRequestException("Текущий урок ученика не найден");
 
     const meeting = await this.repo.createMeeting({
-      lesson: { connect: { order } },
+      lesson: { connect: { id: lesson.id } },
       scope: "INDIVIDUAL",
       student: { connect: { id: student.id } },
-      title: `Индивидуальная практика: ${lesson?.title ?? `Lesson ${order}`}`,
+      title: `Индивидуальная практика: ${lesson.title ?? `Lesson ${order}`}`,
       date: this.toDate(body.date),
       startTime: body.startTime,
       endTime: body.endTime,
@@ -166,6 +168,14 @@ export class MeetingsService {
       status: "scheduled",
     });
     return this.toDto(meeting);
+  }
+
+  /**
+   * Практика конкретной группы с её экрана — тонкая обёртка над `create` со
+   * `scope: "GROUP"` (BACKEND.md §7.5). `groupId` из пути, время из группы.
+   */
+  createForGroup(groupId: string, body: ScheduleGroupMeetingRequestDto): Promise<ScheduleMeetingDto> {
+    return this.create({ scope: "GROUP", groupId, date: body.date, meetUrl: body.meetUrl });
   }
 
   async update(id: string, body: UpdateMeetingRequestDto): Promise<ScheduleMeetingDto> {

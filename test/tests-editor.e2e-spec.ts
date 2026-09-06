@@ -3,46 +3,63 @@ import request from "supertest";
 import { createTestApp } from "./utils/create-test-app";
 import { loginAs } from "./utils/login";
 
+const EN_GROUP_6MO = "en-group-6mo";
+
 describe("tests editor (e2e)", () => {
   let app: INestApplication;
   let curatorToken: string;
+  let lessonIdByOrder: Map<number, string>;
+
+  async function lessonId(order: number): Promise<string> {
+    if (lessonIdByOrder.has(order)) return lessonIdByOrder.get(order)!;
+    const res = await request(app.getHttpServer())
+      .get(`/courses/products/${EN_GROUP_6MO}/lessons`)
+      .set("Authorization", `Bearer ${curatorToken}`)
+      .expect(200);
+    for (const l of res.body as { id: string; order: number }[]) lessonIdByOrder.set(l.order, l.id);
+    return lessonIdByOrder.get(order)!;
+  }
 
   beforeAll(async () => {
     app = await createTestApp();
     curatorToken = await loginAs(app, "curator");
+    lessonIdByOrder = new Map();
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  it("GET /tests/:lessonOrder — null, если теста нет", async () => {
+  it("GET /tests/lesson/:lessonId — null, если теста нет", async () => {
+    const id = await lessonId(7);
     const res = await request(app.getHttpServer())
-      .get("/tests/7")
+      .get(`/tests/lesson/${id}`)
       .set("Authorization", `Bearer ${curatorToken}`)
       .expect(200);
     expect(res.body).toBeNull();
   });
 
   it("POST /tests — повторный вызов для того же урока возвращает существующий тест", async () => {
+    const id = await lessonId(8);
     const first = await request(app.getHttpServer())
       .post("/tests")
       .set("Authorization", `Bearer ${curatorToken}`)
-      .send({ lessonOrder: 8 })
+      .send({ lessonId: id })
       .expect(201);
     const second = await request(app.getHttpServer())
       .post("/tests")
       .set("Authorization", `Bearer ${curatorToken}`)
-      .send({ lessonOrder: 8 })
+      .send({ lessonId: id })
       .expect(201);
     expect(second.body.id).toBe(first.body.id);
   });
 
   it("публикация без вопросов — 400 (TЗ инвариант 10)", async () => {
+    const id = await lessonId(9);
     const test = await request(app.getHttpServer())
       .post("/tests")
       .set("Authorization", `Bearer ${curatorToken}`)
-      .send({ lessonOrder: 9 });
+      .send({ lessonId: id });
     await request(app.getHttpServer())
       .patch(`/tests/${test.body.id}`)
       .set("Authorization", `Bearer ${curatorToken}`)
@@ -51,10 +68,11 @@ describe("tests editor (e2e)", () => {
   });
 
   it("вопрос/вариант/публикация/эксклюзивность single-choice/удаление с перенумерацией", async () => {
+    const id = await lessonId(11);
     const test = await request(app.getHttpServer())
       .post("/tests")
       .set("Authorization", `Bearer ${curatorToken}`)
-      .send({ lessonOrder: 11 });
+      .send({ lessonId: id });
     const testId = test.body.id;
 
     const q1 = await request(app.getHttpServer())
@@ -110,16 +128,17 @@ describe("tests editor (e2e)", () => {
   });
 
   it("DELETE /tests/:id — удаляет тест", async () => {
+    const id = await lessonId(12);
     const test = await request(app.getHttpServer())
       .post("/tests")
       .set("Authorization", `Bearer ${curatorToken}`)
-      .send({ lessonOrder: 12 });
+      .send({ lessonId: id });
     await request(app.getHttpServer())
       .delete(`/tests/${test.body.id}`)
       .set("Authorization", `Bearer ${curatorToken}`)
       .expect(204);
     const check = await request(app.getHttpServer())
-      .get("/tests/12")
+      .get(`/tests/lesson/${id}`)
       .set("Authorization", `Bearer ${curatorToken}`)
       .expect(200);
     expect(check.body).toBeNull();
@@ -127,6 +146,10 @@ describe("tests editor (e2e)", () => {
 
   it("student → 403 на редактор теста", async () => {
     const token = await loginAs(app, "kanat");
-    await request(app.getHttpServer()).get("/tests/1").set("Authorization", `Bearer ${token}`).expect(403);
+    const id = await lessonId(1);
+    await request(app.getHttpServer())
+      .get(`/tests/lesson/${id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(403);
   });
 });

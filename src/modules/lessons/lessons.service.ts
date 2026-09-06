@@ -1,18 +1,24 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { LessonsRepository } from "./lessons.repository";
+import { CourseResolverService } from "../courses/course-resolver.service";
+import { CreateLessonRequestDto } from "./dto/create-lesson.dto";
 import { LessonCatalogItemDto } from "./dto/lesson-catalog-item.dto";
 import { LessonEditorDto, UpdateLessonRequestDto } from "./dto/lesson-editor.dto";
 
 @Injectable()
 export class LessonsService {
-  constructor(private readonly lessons: LessonsRepository) {}
+  constructor(
+    private readonly lessons: LessonsRepository,
+    private readonly resolver: CourseResolverService,
+  ) {}
 
-  async catalog(): Promise<LessonCatalogItemDto[]> {
+  async catalog(courseProductId: string): Promise<LessonCatalogItemDto[]> {
     const [rows, withPractice] = await Promise.all([
-      this.lessons.findAllOrdered(),
-      this.lessons.ordersWithPractice(),
+      this.lessons.findAllOrdered(courseProductId),
+      this.lessons.ordersWithPractice(courseProductId),
     ]);
     return rows.map((l) => ({
+      id: l.id,
       order: l.order,
       title: l.title,
       block: l.block,
@@ -21,20 +27,27 @@ export class LessonsService {
     }));
   }
 
-  private async toEditorDto(lesson: {
-    order: number;
-    title: string;
-    description: string;
-    videoUrl: string;
-    duration: string;
-    block: string;
-  }): Promise<LessonEditorDto> {
+  private async toEditorDto(
+    courseProductId: string,
+    language: string,
+    format: string,
+    lesson: {
+      id: string;
+      order: number;
+      title: string;
+      description: string;
+      videoUrl: string;
+      duration: string;
+      block: string;
+    },
+  ): Promise<LessonEditorDto> {
     const [opened, completed, inProgress] = await Promise.all([
-      this.lessons.countOpened(lesson.order),
-      this.lessons.countCompleted(lesson.order),
-      this.lessons.countInProgress(lesson.order),
+      this.lessons.countOpened(courseProductId, lesson.order, language, format),
+      this.lessons.countCompleted(lesson.id),
+      this.lessons.countInProgress(lesson.id),
     ]);
     return {
+      id: lesson.id,
       order: lesson.order,
       title: lesson.title,
       description: lesson.description,
@@ -45,20 +58,47 @@ export class LessonsService {
     };
   }
 
-  async editor(order: number): Promise<LessonEditorDto> {
-    const lesson = await this.lessons.findByOrder(order);
+  async editor(courseProductId: string, order: number): Promise<LessonEditorDto> {
+    const product = await this.resolver.byId(courseProductId);
+    const lesson = await this.lessons.findByOrder(courseProductId, order);
     if (!lesson) throw new NotFoundException("Урок не найден");
-    return this.toEditorDto(lesson);
+    return this.toEditorDto(courseProductId, product.language, product.format, lesson);
   }
 
-  async update(order: number, body: UpdateLessonRequestDto): Promise<LessonEditorDto> {
-    const lesson = await this.lessons.findByOrder(order);
+  /**
+   * Создать урок в конце набора продукта: `order = max(order) + 1`
+   * (TЗ §15 п.9). `@@unique([courseProductId, order])` не нарушается — новый
+   * номер строго больше всех существующих. Прогресс/встречи/тесты ссылаются на
+   * `Lesson.id`, поэтому добавление в хвост ничего не ломает (TЗ §4.3).
+   */
+  async create(courseProductId: string, body: CreateLessonRequestDto): Promise<LessonEditorDto> {
+    const product = await this.resolver.byId(courseProductId);
+    const order = (await this.lessons.maxOrder(courseProductId)) + 1;
+    const lesson = await this.lessons.create({
+      courseProductId,
+      order,
+      title: body.title.trim(),
+      description: body.description?.trim() ?? "",
+      videoUrl: body.videoUrl?.trim() ?? "",
+      duration: body.duration?.trim() || "00:00",
+      block: body.block.trim(),
+    });
+    return this.toEditorDto(courseProductId, product.language, product.format, lesson);
+  }
+
+  async update(
+    courseProductId: string,
+    order: number,
+    body: UpdateLessonRequestDto,
+  ): Promise<LessonEditorDto> {
+    const product = await this.resolver.byId(courseProductId);
+    const lesson = await this.lessons.findByOrder(courseProductId, order);
     if (!lesson) throw new NotFoundException("Урок не найден");
-    const updated = await this.lessons.update(order, {
+    const updated = await this.lessons.update(courseProductId, order, {
       title: body.title?.trim(),
       description: body.description,
       videoUrl: body.videoUrl,
     });
-    return this.toEditorDto(updated);
+    return this.toEditorDto(courseProductId, product.language, product.format, updated);
   }
 }

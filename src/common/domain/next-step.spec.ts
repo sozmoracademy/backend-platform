@@ -21,6 +21,34 @@ describe("nextStepFor", () => {
     expect(step).toEqual({ kind: "lesson", lesson: lessons[1] });
   });
 
+  it("kind=test: непройденный тест завершённого урока важнее следующего урока (тест-гейт)", () => {
+    // урок 1 завершён, тест 1 не сдан, урок 2 открыт группой и не завершён —
+    // следующий шаг = тест 1, а не «иди на урок 2» (он всё равно закрыт гейтом).
+    const step = nextStepFor({
+      openedUpTo: 2,
+      completedOrders: new Set([1]),
+      lessons,
+      tests: [{ lessonOrder: 1, status: "published", questionCount: 5, timeLimitSec: 300 }],
+      attempts: [],
+      meetings: [],
+      today,
+    });
+    expect(step).toMatchObject({ kind: "test", lesson: lessons[0] });
+  });
+
+  it("kind=lesson: сданный тест не блокирует переход к следующему уроку", () => {
+    const step = nextStepFor({
+      openedUpTo: 2,
+      completedOrders: new Set([1]),
+      lessons,
+      tests: [{ lessonOrder: 1, status: "published", questionCount: 5, timeLimitSec: 300 }],
+      attempts: [{ lessonOrder: 1, status: "submitted", expiresAt: today, score: 90, passed: true }],
+      meetings: [],
+      today,
+    });
+    expect(step).toEqual({ kind: "lesson", lesson: lessons[1] });
+  });
+
   it("kind=test, если урок завершён и тест published доступен", () => {
     const step = nextStepFor({
       openedUpTo: 1,

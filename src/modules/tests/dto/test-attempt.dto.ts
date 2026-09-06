@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiExtraModels, ApiProperty, getSchemaPath } from "@nestjs/swagger";
 import { IsArray, IsString } from "class-validator";
 import type { QuestionType } from "@prisma/client";
 import type { TestAvailability, TestLockedReason } from "../../../common/domain";
@@ -57,19 +57,27 @@ export class TestQuestionReviewDto {
 }
 
 /**
- * Единая форма попытки (BACKEND.md §12) — дискриминант по `status`. Пока
- * `in_progress`, вопросы без `isCorrect` (скоринг и разбор — только после submit).
+ * Единая форма попытки (BACKEND.md §12) — дискриминант по `status`.
+ * `in_progress`: вопросы без `isCorrect` (`TestQuestionDto`); `submitted`: с разбором
+ * (`TestQuestionReviewDto`, `isCorrect` у опций) + баллы. Контракт описан как `oneOf`,
+ * чтобы `openapi-typescript` во фронте выдал дискриминированный union.
  */
+@ApiExtraModels(TestQuestionDto, TestQuestionReviewDto)
 export class TestAttemptDto {
   @ApiProperty({ enum: ["in_progress", "submitted"] }) status!: "in_progress" | "submitted";
   @ApiProperty() id!: string;
   @ApiProperty() title!: string;
-  @ApiProperty({ required: false }) expiresAt?: string;
-  @ApiProperty({ required: false }) passingScore?: number;
-  @ApiProperty({ required: false }) correctCount?: number;
-  @ApiProperty({ required: false }) totalQuestions?: number;
-  @ApiProperty({ required: false }) score?: number;
-  @ApiProperty({ required: false }) passed?: boolean;
-  @ApiProperty() answers!: Record<string, string[]>;
-  @ApiProperty({ type: [TestQuestionDto] }) questions!: (TestQuestionDto | TestQuestionReviewDto)[];
+  @ApiProperty({ required: false, description: "Только для status=in_progress" }) expiresAt?: string;
+  @ApiProperty({ required: false, description: "Только для status=submitted" }) passingScore?: number;
+  @ApiProperty({ required: false, description: "Только для status=submitted" }) correctCount?: number;
+  @ApiProperty({ required: false, description: "Только для status=submitted" }) totalQuestions?: number;
+  @ApiProperty({ required: false, description: "Только для status=submitted" }) score?: number;
+  @ApiProperty({ required: false, description: "Только для status=submitted" }) passed?: boolean;
+  @ApiProperty({ type: "object", additionalProperties: { type: "array", items: { type: "string" } } })
+  answers!: Record<string, string[]>;
+  @ApiProperty({
+    type: "array",
+    items: { oneOf: [{ $ref: getSchemaPath(TestQuestionDto) }, { $ref: getSchemaPath(TestQuestionReviewDto) }] },
+  })
+  questions!: (TestQuestionDto | TestQuestionReviewDto)[];
 }

@@ -8,7 +8,7 @@ export class CoursesService {
 
   async products(): Promise<CourseProductDto[]> {
     const rows = await this.prisma.courseProduct.findMany({
-      orderBy: [{ language: "asc" }, { format: "asc" }],
+      orderBy: [{ durationMonths: "desc" }, { language: "asc" }],
     });
     return rows.map((p) => ({
       id: p.id,

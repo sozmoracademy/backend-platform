@@ -11,12 +11,19 @@ import {
   type TestLockedReason,
 } from "../../common/domain";
 import { SaveAnswerRequestDto, TestAttemptDto, TestIntroDto } from "./dto/test-attempt.dto";
+import { CourseResolverService } from "../courses/course-resolver.service";
 
-type FullTest = LessonTest & { questions: (TestQuestion & { options: QuestionOption[] })[] };
+type FullTest = LessonTest & {
+  questions: (TestQuestion & { options: QuestionOption[] })[];
+  lesson: { id: string; order: number };
+};
 
 @Injectable()
 export class TestsService {
-  constructor(private readonly repo: TestsRepository) {}
+  constructor(
+    private readonly repo: TestsRepository,
+    private readonly resolver: CourseResolverService,
+  ) {}
 
   /** Тот же объект, что и Prisma-модель, но с `expiresAt` строкой — совместимо с `AttemptLike`
    * (чистые функции не знают про `Date`) и сохраняет остальные поля (`id`, …) через generics. */
@@ -33,8 +40,8 @@ export class TestsService {
     if (status !== "active") throw new ForbiddenException("Доступ к обучению закрыт");
   }
 
-  private async lessonCompleted(studentId: string, lessonOrder: number): Promise<boolean> {
-    const row = await this.repo.findLessonCompletion(studentId, lessonOrder);
+  private async lessonCompleted(studentId: string, lessonId: string): Promise<boolean> {
+    const row = await this.repo.findLessonCompletion(studentId, lessonId);
     return Boolean(row?.completedAt);
   }
 
@@ -95,13 +102,15 @@ export class TestsService {
   }
 
   async intro(studentId: string, order: number): Promise<TestIntroDto> {
-    const test = await this.repo.findLightByLessonOrder(order, false);
+    const student = await this.repo.findStudentAccessInfo(studentId);
+    const product = await this.resolver.forStudent(student);
+    const test = await this.repo.findLightByLessonOrder(product.id, order, false);
     if (!test) throw new NotFoundException("Тест не найден");
 
     const attempts = await this.repo.findAttemptsForTest(studentId, test.id);
     const freshenedAttempts = (await this.freshenAll(attempts, test.id)).map((a) => this.toAttemptLikeRow(a));
 
-    const lessonDone = await this.lessonCompleted(studentId, order);
+    const lessonDone = await this.lessonCompleted(studentId, test.lesson.id);
     const now = new Date().toISOString();
     const availability = testAvailability(test.status, lessonDone, freshenedAttempts, now);
     const active = activeAttemptOf(freshenedAttempts, now);
@@ -134,9 +143,12 @@ export class TestsService {
   async startAttempt(studentId: string, order: number): Promise<TestAttemptDto> {
     await this.requireActiveAccess(studentId);
 
-    const test = await this.repo.findFullByLessonOrder(order, true);
+    const student = await this.repo.findStudentAccessInfo(studentId);
+    const product = await this.resolver.forStudent(student);
+    const test = await this.repo.findFullByLessonOrder(product.id, order, true);
     if (!test) throw new NotFoundException("Тест не найден");
-    if (!(await this.lessonCompleted(studentId, order))) throw new ForbiddenException("Тест пока недоступен");
+    if (!(await this.lessonCompleted(studentId, test.lesson.id)))
+      throw new ForbiddenException("Тест пока недоступен");
 
     const existingAttempts = await this.repo.findAttemptsForTest(studentId, test.id);
     const freshened = await Promise.all(existingAttempts.map((a) => this.ensureFresh(a, test)));
@@ -152,7 +164,7 @@ export class TestsService {
 
     const attempt = await this.repo.createAttempt({
       testId: test.id,
-      lessonOrder: test.lessonOrder,
+      lessonId: test.lesson.id,
       studentId,
       expiresAt: new Date(Date.now() + test.timeLimitSec * 1000),
       totalQuestions: test.questions.length,

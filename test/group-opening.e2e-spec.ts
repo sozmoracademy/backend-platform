@@ -47,11 +47,15 @@ describe("group-opening invariant (e2e)", () => {
     prisma = app.get(PrismaService);
     curatorToken = await loginAs(app, "curator");
 
+    const product = await prisma.courseProduct.findUniqueOrThrow({
+      where: { language_format_durationMonths: { language: "en", format: "GROUP", durationMonths: 6 } },
+    });
     const group = await prisma.group.create({
       data: {
         code: `E2E-${Date.now()}`,
         name: "e2e fixture group",
         language: "en",
+        courseProduct: { connect: { id: product.id } },
         startDate: new Date("2026-08-18T00:00:00.000Z"),
         endDate: new Date("2027-02-18T00:00:00.000Z"),
         practiceStart: "20:00",

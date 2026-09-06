@@ -3,9 +3,10 @@ import { StudentsController } from "./students.controller";
 import { StudentsService } from "./students.service";
 import { StudentsRepository } from "./students.repository";
 import { UsersModule } from "../users/users.module";
+import { CoursesModule } from "../courses/courses.module";
 
 @Module({
-  imports: [UsersModule],
+  imports: [UsersModule, CoursesModule],
   controllers: [StudentsController],
   providers: [StudentsService, StudentsRepository],
   exports: [StudentsService, StudentsRepository],

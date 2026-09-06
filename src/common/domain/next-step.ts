@@ -64,16 +64,22 @@ export function nextStepFor<
     now = new Date().toISOString(),
   } = params;
 
+  // Первый незавершённый открытый урок — «фронтир».
+  let frontierOrder: number | undefined;
   for (let order = 1; order <= openedUpTo; order++) {
     if (!completedOrders.has(order)) {
-      const lesson = lessons.find((l) => l.order === order);
-      if (lesson) return { kind: "lesson", lesson };
+      frontierOrder = order;
       break;
     }
   }
 
+  // Тест-гейт (ТЗ инвариант 4): непройденный опубликованный тест завершённого
+  // урока ПЕРЕД фронтиром важнее, чем «иди на следующий урок» — тот всё равно
+  // закрыт, пока тест не сдан. Берём самый ранний такой тест.
+  const limit = frontierOrder ?? openedUpTo + 1;
   const completedSorted = [...completedOrders].sort((a, b) => a - b);
   for (const order of completedSorted) {
+    if (order >= limit) break;
     const test = tests.find((t) => t.lessonOrder === order);
     if (!test) continue;
     const testAttempts = attempts.filter((a) => a.lessonOrder === order);
@@ -88,6 +94,11 @@ export function nextStepFor<
         };
       }
     }
+  }
+
+  if (frontierOrder !== undefined) {
+    const lesson = lessons.find((l) => l.order === frontierOrder);
+    if (lesson) return { kind: "lesson", lesson };
   }
 
   const todayMeeting = meetings.find((m) => m.status === "scheduled" && m.date === today);

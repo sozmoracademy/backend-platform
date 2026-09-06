@@ -70,10 +70,15 @@ export interface GroupStage {
 }
 
 /** Текущий этап группы (месяц/уровень/урок) — по `group.currentLesson` (BACKEND.md §6). */
-export function groupStage(currentLesson: number, levelPlan: LevelPlanEntry[], lessonCount = 54): GroupStage {
+export function groupStage(
+  currentLesson: number,
+  levelPlan: LevelPlanEntry[],
+  lessonCount: number,
+  monthsTotal: number,
+): GroupStage {
   return {
-    month: monthOfLesson(currentLesson, lessonCount),
-    level: levelForLesson(levelPlan, currentLesson, lessonCount),
+    month: monthOfLesson(currentLesson, lessonCount, monthsTotal),
+    level: levelForLesson(levelPlan, currentLesson, lessonCount, monthsTotal),
     lesson: currentLesson,
   };
 }

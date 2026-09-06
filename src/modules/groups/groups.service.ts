@@ -25,6 +25,7 @@ import {
   UpdateGroupRequestDto,
 } from "./dto/group.dto";
 import { PrismaService } from "../../infra/prisma/prisma.service";
+import { CourseResolverService } from "../courses/course-resolver.service";
 
 type GroupWithTeacher = Group & { teacher: Teacher | null; _count: { students: number } };
 
@@ -34,6 +35,7 @@ export class GroupsService {
     private readonly repo: GroupsRepository,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly resolver: CourseResolverService,
   ) {}
 
   private today(): string {
@@ -44,21 +46,17 @@ export class GroupsService {
     return d.toISOString().slice(0, 10);
   }
 
-  private async levelPlanFor(language: Group["language"]): Promise<LevelPlanEntry[]> {
-    const product = await this.prisma.courseProduct.findUnique({
-      where: { language_format: { language, format: "GROUP" } },
-    });
-    return (product?.levelPlan as unknown as LevelPlanEntry[]) ?? [];
-  }
-
   private async toSummary(group: GroupWithTeacher): Promise<GroupSummaryDto> {
-    const levelPlan = await this.levelPlanFor(group.language);
-    const stage = groupStage(group.currentLesson, levelPlan);
+    const product = await this.resolver.byId(group.courseProductId);
+    const levelPlan = (product.levelPlan as unknown as LevelPlanEntry[]) ?? [];
+    const lessonCount = await this.resolver.countLessons(group.courseProductId);
+    const stage = groupStage(group.currentLesson, levelPlan, lessonCount, product.durationMonths);
     return {
       id: group.id,
       code: group.code,
       name: group.name,
       language: group.language,
+      courseProductId: group.courseProductId,
       status: group.status,
       startDate: this.toDateStr(group.startDate),
       endDate: this.toDateStr(group.endDate),
@@ -108,12 +106,24 @@ export class GroupsService {
     const name = groupNameFor(code, body.language, body.startDate, body.practiceStart);
     const start = new Date(`${body.startDate}T00:00:00.000Z`);
     const end = new Date(start);
-    end.setMonth(end.getMonth() + 6);
+    end.setMonth(end.getMonth() + body.durationMonths);
+
+    const product = await this.prisma.courseProduct.findUnique({
+      where: {
+        language_format_durationMonths: {
+          language: body.language,
+          format: "GROUP",
+          durationMonths: body.durationMonths,
+        },
+      },
+    });
+    if (!product) throw new BadRequestException("Продукт для выбранного языка/длительности не найден");
 
     const group = await this.repo.create({
       code,
       name,
       language: body.language,
+      courseProduct: { connect: { id: product.id } },
       startDate: start,
       endDate: end,
       practiceStart: body.practiceStart,
@@ -140,7 +150,12 @@ export class GroupsService {
   async detail(id: string): Promise<GroupDetailDto> {
     const group = await this.loadOrThrow(id);
     const summary = await this.toSummary(group);
-    const lesson = await this.prisma.lesson.findUnique({ where: { order: group.currentLesson } });
+    const lesson = await this.prisma.lesson.findUnique({
+      where: {
+        courseProductId_order: { courseProductId: group.courseProductId, order: group.currentLesson },
+      },
+    });
+    const lessonCount = await this.resolver.countLessons(group.courseProductId);
 
     const today = this.today();
     const roster = await this.repo.findRoster(id);
@@ -166,14 +181,14 @@ export class GroupsService {
         status: m.status,
       })),
       roster: roster.map((s) => {
-        const completedOrders = new Set(s.lessons.map((l) => l.lessonOrder));
+        const completedOrders = new Set(s.lessons.map((l) => l.lesson.order));
         return {
           id: s.id,
           firstName: s.firstName,
           lastName: s.lastName,
           avatarTone: s.avatarTone,
           currentLessonOrder: currentLessonOrder(s.openedUpTo, completedOrders),
-          progressPct: progressPercent(completedOrders.size, 54),
+          progressPct: progressPercent(completedOrders.size, lessonCount),
           lastActivity: this.toDateStr(s.lastActivity),
           accessStatus: effectiveAccessStatus(
             { status: s.status, endDate: this.toDateStr(s.endDate) },

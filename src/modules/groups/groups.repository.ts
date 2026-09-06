@@ -35,7 +35,9 @@ export class GroupsRepository {
   findRoster(groupId: string) {
     return this.prisma.student.findMany({
       where: { groupId },
-      include: { lessons: { where: { completedAt: { not: null } }, select: { lessonOrder: true } } },
+      include: {
+        lessons: { where: { completedAt: { not: null } }, select: { lesson: { select: { order: true } } } },
+      },
     });
   }
 

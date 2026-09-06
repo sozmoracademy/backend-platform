@@ -8,11 +8,12 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
 } from "class-validator";
-import type { AccessStatus, CourseType, Lang } from "@prisma/client";
+import type { AccessStatus, CourseType, Lang, MeetingStatus } from "@prisma/client";
 
 export type PaymentStatusDto = "full" | "partial" | "unpaid";
 
@@ -122,10 +123,22 @@ export class StudentOverviewDto {
   @ApiProperty({ nullable: true }) teacherName!: string | null;
 }
 
+export class StudentLearningLessonTestDto {
+  @ApiProperty() published!: boolean;
+  /** Лучший результат ученика по тесту, % (`null` — попыток не было). */
+  @ApiProperty({ nullable: true }) bestScore!: number | null;
+  /** `true`/`false` по лучшей попытке; `null` — попыток не было. */
+  @ApiProperty({ nullable: true }) passed!: boolean | null;
+  @ApiProperty() passingScore!: number;
+}
+
 export class StudentLearningLessonDto {
   @ApiProperty() order!: number;
   @ApiProperty() title!: string;
   @ApiProperty({ enum: ["locked", "available", "completed"] }) state!: "locked" | "available" | "completed";
+  /** Тест урока с результатом ученика; `null` — у урока нет теста. */
+  @ApiProperty({ type: StudentLearningLessonTestDto, nullable: true })
+  test!: StudentLearningLessonTestDto | null;
 }
 
 export class StudentLearningDto {
@@ -146,7 +159,7 @@ export class StudentMeetingDto {
   @ApiProperty() startTime!: string;
   @ApiProperty() endTime!: string;
   @ApiProperty() meetUrl!: string;
-  @ApiProperty() status!: string;
+  @ApiProperty({ enum: ["scheduled", "completed", "cancelled"] }) status!: MeetingStatus;
   @ApiProperty({ required: false }) attended?: boolean;
 }
 
@@ -175,6 +188,11 @@ export class CreateStudentRequestDto {
   @ApiProperty() @IsString() city!: string;
   @ApiProperty() @IsString() phone!: string;
   @ApiProperty() @IsString() @MinLength(1) login!: string;
+  @ApiProperty({ description: "Пароль ученика (клиентский предпросмотр). Хранится только bcrypt-хешем." })
+  @IsString()
+  @MinLength(4)
+  @MaxLength(64)
+  password!: string;
   @ApiProperty({ enum: ["en", "ru"] }) @IsEnum(["en", "ru"]) language!: Lang;
   @ApiProperty({ enum: ["GROUP", "INDIVIDUAL"] }) @IsEnum(["GROUP", "INDIVIDUAL"]) type!: CourseType;
   @ApiProperty() @IsDateString() startDate!: string;

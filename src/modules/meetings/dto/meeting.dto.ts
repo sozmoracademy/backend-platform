@@ -48,6 +48,16 @@ export class CreateMeetingRequestDto {
   @ApiProperty({ required: false }) @IsOptional() @IsString() meetUrl?: string;
 }
 
+/**
+ * `POST /groups/:id/meetings` — узкая форма назначения практики с экрана группы
+ * (BACKEND.md §7.5): `groupId` берётся из пути, `scope` всегда `GROUP`, время —
+ * из вечернего слота группы. В теле — только дата и (опционально) разовая ссылка.
+ */
+export class ScheduleGroupMeetingRequestDto {
+  @ApiProperty() @IsDateString() date!: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() meetUrl?: string;
+}
+
 export class UpdateMeetingRequestDto {
   @ApiProperty({ required: false, enum: ["scheduled", "completed", "cancelled"] })
   @IsOptional()

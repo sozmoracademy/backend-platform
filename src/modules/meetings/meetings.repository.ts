@@ -2,6 +2,13 @@ import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 
+const MEETING_INCLUDE = {
+  group: { select: { id: true, name: true, teacherId: true } },
+  student: { select: { id: true, firstName: true, lastName: true, teacherId: true } },
+  attendance: { select: { studentId: true } },
+  lesson: { select: { order: true } },
+} satisfies Prisma.MeetingInclude;
+
 @Injectable()
 export class MeetingsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -14,24 +21,13 @@ export class MeetingsRepository {
         : {};
     return this.prisma.meeting.findMany({
       where,
-      include: {
-        group: { select: { id: true, name: true, teacherId: true } },
-        student: { select: { id: true, firstName: true, lastName: true, teacherId: true } },
-        attendance: { select: { studentId: true } },
-      },
+      include: MEETING_INCLUDE,
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
   }
 
   findById(id: string) {
-    return this.prisma.meeting.findUnique({
-      where: { id },
-      include: {
-        group: { select: { id: true, name: true, teacherId: true } },
-        student: { select: { id: true, firstName: true, lastName: true, teacherId: true } },
-        attendance: { select: { studentId: true } },
-      },
-    });
+    return this.prisma.meeting.findUnique({ where: { id }, include: MEETING_INCLUDE });
   }
 
   findGroupById(id: string) {
@@ -42,8 +38,8 @@ export class MeetingsRepository {
     return this.prisma.student.findUnique({ where: { id } });
   }
 
-  findLessonByOrder(order: number) {
-    return this.prisma.lesson.findUnique({ where: { order } });
+  findLessonByOrder(courseProductId: string, order: number) {
+    return this.prisma.lesson.findUnique({ where: { courseProductId_order: { courseProductId, order } } });
   }
 
   findGroupRoster(groupId: string) {
@@ -54,26 +50,11 @@ export class MeetingsRepository {
   }
 
   createMeeting(data: Prisma.MeetingCreateInput) {
-    return this.prisma.meeting.create({
-      data,
-      include: {
-        group: { select: { id: true, name: true, teacherId: true } },
-        student: { select: { id: true, firstName: true, lastName: true, teacherId: true } },
-        attendance: { select: { studentId: true } },
-      },
-    });
+    return this.prisma.meeting.create({ data, include: MEETING_INCLUDE });
   }
 
   update(id: string, data: Prisma.MeetingUpdateInput) {
-    return this.prisma.meeting.update({
-      where: { id },
-      data,
-      include: {
-        group: { select: { id: true, name: true, teacherId: true } },
-        student: { select: { id: true, firstName: true, lastName: true, teacherId: true } },
-        attendance: { select: { studentId: true } },
-      },
-    });
+    return this.prisma.meeting.update({ where: { id }, data, include: MEETING_INCLUDE });
   }
 
   setAttendance(meetingId: string, studentId: string, present: boolean) {

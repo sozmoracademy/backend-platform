@@ -1,7 +1,7 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Min } from "class-validator";
-import type { GroupStatus, Lang } from "@prisma/client";
+import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Min } from "class-validator";
+import type { AccessStatus, GroupStatus, Lang, MeetingStatus } from "@prisma/client";
 import type { CefrLevel } from "../../../common/domain";
 
 export class GroupSummaryDto {
@@ -9,6 +9,7 @@ export class GroupSummaryDto {
   @ApiProperty() code!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ enum: ["en", "ru"] }) language!: Lang;
+  @ApiProperty() courseProductId!: string;
   @ApiProperty({ enum: ["recruiting", "active", "finished", "archived"] }) status!: GroupStatus;
   @ApiProperty() startDate!: string;
   @ApiProperty() endDate!: string;
@@ -61,7 +62,7 @@ export class GroupRecentMeetingDto {
   @ApiProperty() startTime!: string;
   @ApiProperty() endTime!: string;
   @ApiProperty() meetUrl!: string;
-  @ApiProperty() status!: string;
+  @ApiProperty({ enum: ["scheduled", "completed", "cancelled"] }) status!: MeetingStatus;
 }
 
 export class GroupRosterItemDto {
@@ -72,7 +73,7 @@ export class GroupRosterItemDto {
   @ApiProperty() currentLessonOrder!: number;
   @ApiProperty() progressPct!: number;
   @ApiProperty() lastActivity!: string;
-  @ApiProperty() accessStatus!: string;
+  @ApiProperty({ enum: ["active", "expired", "disabled"] }) accessStatus!: AccessStatus;
   @ApiProperty({ enum: ["active", "at_risk", "inactive"] }) idleBucket!: "active" | "at_risk" | "inactive";
 }
 
@@ -88,6 +89,7 @@ export class GroupDetailDto extends GroupSummaryDto {
 
 export class CreateGroupRequestDto {
   @ApiProperty({ enum: ["en", "ru"] }) @IsEnum(["en", "ru"]) language!: Lang;
+  @ApiProperty({ enum: [3, 6] }) @IsIn([3, 6]) durationMonths!: 3 | 6;
   @ApiProperty() @IsDateString() startDate!: string;
   @ApiProperty() @IsString() practiceStart!: string;
   @ApiProperty() @IsString() practiceEnd!: string;

@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min, MinLength } from "class-validator";
+import { IsBoolean, IsEnum, IsOptional, IsString, Min, MinLength, IsInt } from "class-validator";
 import type { QuestionType, TestStatus } from "@prisma/client";
 
 export class TestEditorOptionDto {
@@ -16,9 +16,10 @@ export class TestEditorQuestionDto {
   @ApiProperty({ type: [TestEditorOptionDto] }) options!: TestEditorOptionDto[];
 }
 
-/** `GET /tests/:lessonOrder` (для редактора) — полный тест с `isCorrect` (куратор всегда его видит). */
+/** `GET /tests/lesson/:lessonId` (для редактора) — полный тест с `isCorrect` (куратор всегда его видит). */
 export class TestEditorDto {
   @ApiProperty() id!: string;
+  @ApiProperty() lessonId!: string;
   @ApiProperty() lessonOrder!: number;
   @ApiProperty() title!: string;
   @ApiProperty() timeLimitSec!: number;
@@ -29,9 +30,9 @@ export class TestEditorDto {
 
 export class CreateTestRequestDto {
   @ApiProperty()
-  @IsInt()
-  @Min(1)
-  lessonOrder!: number;
+  @IsString()
+  @MinLength(1)
+  lessonId!: string;
 }
 
 export class UpdateTestRequestDto {
