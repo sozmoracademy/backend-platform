@@ -215,6 +215,7 @@ export class StudentCabinetService {
     const ctx = await this.loadContext(studentId);
     const {
       student,
+      product,
       lessons,
       testsPlain,
       attemptsPlain,
@@ -302,10 +303,11 @@ export class StudentCabinetService {
       lessonsDone: completedOrders.size,
       lessonsTotal: lessons.length,
       streakDays: streak,
-      // TODO(TЗ §15.4): «Точность 87%» захардкожена в референсе — воспроизведено как есть.
-      accuracyPct: 87,
-      // TODO(TЗ §15.4): «180 дней доступа» захардкожено в референсе (не путать с AccessInfoDto.daysLeft).
-      daysLeftAccess: 180,
+      // Точность пока не считается — заглушка 0% до появления метрики по ответам тестов.
+      accuracyPct: 0,
+      // Длительность курса в днях (durationMonths × 30): Group-3мес → 90, Group-6мес → 180,
+      // Individual-1мес → 30. Не путать с AccessInfoDto.daysLeft (остаток до endDate).
+      daysLeftAccess: product.durationMonths * 30,
       levels: levels.map((level) => ({ level, status: statusOf(level) })),
     };
 

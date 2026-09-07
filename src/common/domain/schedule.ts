@@ -156,7 +156,7 @@ export function weekPlan(params: {
   return week.map((date, i) => {
     const slot = PLAN_RHYTHM[i % PLAN_RHYTHM.length] ?? PLAN_RHYTHM[0]!;
     const lesson = lessonAt(slot.offset);
-    const topic = lesson?.title ?? "английский";
+    const topic = lesson?.title ?? "занятие";
     const meeting = meetings.find((m) => m.date === date);
     const isRest = slot.kind === "rest";
 
