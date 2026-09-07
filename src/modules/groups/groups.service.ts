@@ -57,6 +57,7 @@ export class GroupsService {
       name: group.name,
       language: group.language,
       courseProductId: group.courseProductId,
+      durationMonths: product.durationMonths,
       status: group.status,
       startDate: this.toDateStr(group.startDate),
       endDate: this.toDateStr(group.endDate),

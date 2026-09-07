@@ -10,6 +10,7 @@ export class GroupSummaryDto {
   @ApiProperty() name!: string;
   @ApiProperty({ enum: ["en", "ru"] }) language!: Lang;
   @ApiProperty() courseProductId!: string;
+  @ApiProperty({ enum: [3, 6] }) durationMonths!: number;
   @ApiProperty({ enum: ["recruiting", "active", "finished", "archived"] }) status!: GroupStatus;
   @ApiProperty() startDate!: string;
   @ApiProperty() endDate!: string;
