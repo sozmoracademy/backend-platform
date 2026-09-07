@@ -196,4 +196,11 @@ export class MeetingsService {
     const meeting = await this.repo.findById(id);
     return this.toDto(meeting!);
   }
+
+  async remove(id: string): Promise<void> {
+    const existing = await this.repo.findById(id);
+    if (!existing) throw new NotFoundException("Практика не найдена");
+    // MeetingAttendance удаляется каскадом (onDelete: Cascade).
+    await this.prisma.meeting.delete({ where: { id } });
+  }
 }

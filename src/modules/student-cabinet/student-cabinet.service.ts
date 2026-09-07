@@ -196,7 +196,9 @@ export class StudentCabinetService {
     now: string,
   ): LessonTestSummaryDto | undefined {
     const test = testsPlain.find((t) => t.lessonOrder === order);
-    if (!test) return undefined;
+    // Пока тест не опубликован (черновик / без вопросов) — ученик его не видит.
+    // Куратор мог открыть редактор и создать пустой draft — это не «есть тест».
+    if (!test || test.status !== "published") return undefined;
     const testAttempts = attemptsPlain.filter((a) => a.testId === test.id);
     const availability = testAvailability(test.status, lessonCompleted, testAttempts, now);
     const best = bestAttemptOf(testAttempts);

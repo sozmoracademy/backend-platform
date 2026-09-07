@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Header, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { IdParamDto } from "../../common/dto/id-param.dto";
@@ -102,6 +102,12 @@ export class StudentsController {
   @Post(":id/reset-password")
   resetPassword(@Param() params: IdParamDto): Promise<ResetStudentPasswordResponseDto> {
     return this.students.resetPassword(params.id);
+  }
+
+  @Delete(":id")
+  @HttpCode(204)
+  remove(@Param() params: IdParamDto): Promise<void> {
+    return this.students.remove(params.id);
   }
 
   @Post(":id/open-lesson")

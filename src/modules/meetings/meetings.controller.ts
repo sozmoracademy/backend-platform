@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { IdParamDto } from "../../common/dto/id-param.dto";
@@ -40,6 +40,12 @@ export class MeetingsController {
     @Body() body: MarkAttendanceRequestDto,
   ): Promise<ScheduleMeetingDto> {
     return this.meetings.markAttendance(params.id, body);
+  }
+
+  @Delete(":id")
+  @HttpCode(204)
+  remove(@Param() params: IdParamDto): Promise<void> {
+    return this.meetings.remove(params.id);
   }
 }
 

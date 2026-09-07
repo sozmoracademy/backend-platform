@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { ProductOrderParamDto, ProductParamDto } from "../../common/dto/product-order-param.dto";
@@ -51,5 +51,12 @@ export class LessonsController {
     @Body() body: UpdateLessonRequestDto,
   ): Promise<LessonEditorDto> {
     return this.lessons.update(params.productId, params.order, body);
+  }
+
+  @Roles("CURATOR")
+  @Delete(":order")
+  @HttpCode(204)
+  remove(@Param() params: ProductOrderParamDto): Promise<void> {
+    return this.lessons.remove(params.productId, params.order);
   }
 }

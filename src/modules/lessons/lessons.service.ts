@@ -4,6 +4,7 @@ import { LessonsRepository } from "./lessons.repository";
 import { CourseResolverService } from "../courses/course-resolver.service";
 import { BunnyStreamService } from "../media/bunny-stream.service";
 import { MediaService } from "../media/media.service";
+import { PrismaService } from "../../infra/prisma/prisma.service";
 import { CreateLessonRequestDto } from "./dto/create-lesson.dto";
 import { LessonCatalogItemDto } from "./dto/lesson-catalog-item.dto";
 import { LessonEditorDto, UpdateLessonRequestDto } from "./dto/lesson-editor.dto";
@@ -16,6 +17,7 @@ export class LessonsService {
     private readonly resolver: CourseResolverService,
     private readonly bunny: BunnyStreamService,
     private readonly media: MediaService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async catalog(courseProductId: string): Promise<LessonCatalogItemDto[]> {
@@ -117,6 +119,44 @@ export class LessonsService {
       videoUrl: body.videoUrl,
     });
     return this.toEditorDto(courseProductId, product.language, product.format, updated);
+  }
+
+  /**
+   * Удалить урок продукта. Дети урока (тест, попытки, практики, прогресс) не
+   * имеют каскада от `Lesson` — снимаем явно. Затем последующие уроки
+   * перенумеровываются `order-1`, а денормализованные «номера текущего урока»
+   * (`Group.currentLesson`, `Student.openedUpTo`) клампятся вниз.
+   */
+  async remove(courseProductId: string, order: number): Promise<void> {
+    const product = await this.resolver.byId(courseProductId);
+    const lesson = await this.lessons.findByOrder(courseProductId, order);
+    if (!lesson) throw new NotFoundException("Урок не найден");
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.testAttempt.deleteMany({ where: { lessonId: lesson.id } });
+      await tx.lessonTest.deleteMany({ where: { lessonId: lesson.id } }); // questions/options — каскадом
+      await tx.meetingAttendance.deleteMany({ where: { meeting: { lessonId: lesson.id } } });
+      await tx.meeting.deleteMany({ where: { lessonId: lesson.id } });
+      await tx.studentLesson.deleteMany({ where: { lessonId: lesson.id } });
+      await tx.lesson.delete({ where: { id: lesson.id } });
+
+      await tx.$executeRaw`
+        UPDATE "Lesson" SET "order" = "order" - 1
+        WHERE "courseProductId" = ${courseProductId} AND "order" > ${order}`;
+      await tx.$executeRaw`
+        UPDATE "Group" SET "currentLesson" = GREATEST("currentLesson" - 1, 1)
+        WHERE "courseProductId" = ${courseProductId} AND "currentLesson" > ${order}`;
+      if (product.format === "INDIVIDUAL") {
+        await tx.$executeRaw`
+          UPDATE "Student" SET "openedUpTo" = GREATEST("openedUpTo" - 1, 1)
+          WHERE "type" = 'INDIVIDUAL' AND "language" = ${product.language}::"Lang" AND "openedUpTo" > ${order}`;
+      } else {
+        await tx.$executeRaw`
+          UPDATE "Student" SET "openedUpTo" = GREATEST("openedUpTo" - 1, 1)
+          WHERE "openedUpTo" > ${order}
+          AND "groupId" IN (SELECT "id" FROM "Group" WHERE "courseProductId" = ${courseProductId})`;
+      }
+    });
   }
 
   /**

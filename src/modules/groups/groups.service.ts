@@ -210,6 +210,20 @@ export class GroupsService {
     return this.toSummary(group);
   }
 
+  async remove(id: string): Promise<void> {
+    const group = await this.loadOrThrow(id);
+    if (group._count.students > 0) {
+      throw new BadRequestException(
+        "В группе есть ученики — сначала переведите их в другую группу или удалите",
+      );
+    }
+    // Практики группы + их посещаемость (Cascade), затем сама группа.
+    await this.prisma.$transaction([
+      this.prisma.meeting.deleteMany({ where: { groupId: id } }),
+      this.prisma.group.delete({ where: { id } }),
+    ]);
+  }
+
   async assignTeacher(id: string, body: AssignTeacherRequestDto): Promise<GroupSummaryDto> {
     const current = await this.loadOrThrow(id);
     if (body.teacherId) {

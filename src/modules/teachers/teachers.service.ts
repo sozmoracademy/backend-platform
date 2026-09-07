@@ -140,4 +140,16 @@ export class TeachersService {
     });
     return this.listItem(updated);
   }
+
+  async remove(id: string): Promise<void> {
+    const teacher = await this.repo.findById(id);
+    if (!teacher) throw new NotFoundException("Преподаватель не найден");
+    // Преподаватель — управляемая сущность без логина: отвязываем от групп и
+    // учеников (валидное состояние «без преподавателя») и удаляем.
+    await this.prisma.$transaction([
+      this.prisma.group.updateMany({ where: { teacherId: id }, data: { teacherId: null } }),
+      this.prisma.student.updateMany({ where: { teacherId: id }, data: { teacherId: null } }),
+      this.prisma.teacher.delete({ where: { id } }),
+    ]);
+  }
 }

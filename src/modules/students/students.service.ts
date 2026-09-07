@@ -4,6 +4,7 @@ import type { CourseProduct, Student } from "@prisma/client";
 import { StudentsRepository, PAGE_SIZE, type StudentsFilter } from "./students.repository";
 import { UsersService } from "../users/users.service";
 import { CourseResolverService } from "../courses/course-resolver.service";
+import { PrismaService } from "../../infra/prisma/prisma.service";
 import {
   bestAttemptOf,
   currentLessonOrder,
@@ -47,6 +48,7 @@ export class StudentsService {
     private readonly users: UsersService,
     private readonly config: ConfigService,
     private readonly resolver: CourseResolverService,
+    private readonly prisma: PrismaService,
   ) {}
 
   private today(): string {
@@ -251,6 +253,20 @@ export class StudentsService {
     const student = await this.repo.findByIdFull(id);
     if (!student) throw new NotFoundException("Ученик не найден");
     return student;
+  }
+
+  /**
+   * Полное удаление ученика: его прогресс, попытки тестов, заметки, оплата и
+   * посещаемость снимаются каскадом; индивидуальные практики и учётную запись
+   * удаляем явно (у них нет каскада от Student).
+   */
+  async remove(id: string): Promise<void> {
+    const student = await this.loadOrThrow(id);
+    await this.prisma.$transaction([
+      this.prisma.meeting.deleteMany({ where: { studentId: id } }),
+      this.prisma.student.delete({ where: { id } }),
+      this.prisma.user.delete({ where: { id: student.userId } }),
+    ]);
   }
 
   /**
