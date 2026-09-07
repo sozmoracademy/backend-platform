@@ -445,6 +445,8 @@ export class StudentCabinetService {
     } = ctx;
     const today = this.today();
     const week = weekRange(today);
+    // Первая учебная неделя ученика: старт пришёлся на текущую неделю (или позже).
+    const firstWeek = this.toDateStr(student.startDate) >= week[0]!;
 
     const agendaByDate = new Map(
       weekAgenda(week, {
@@ -463,6 +465,7 @@ export class StudentCabinetService {
       meetings: meetingsPlain,
       week,
       today,
+      firstWeek,
       dayAgendaOf: (date) => agendaByDate.get(date) ?? [],
     });
   }

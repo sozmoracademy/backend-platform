@@ -175,6 +175,8 @@ export class MeScheduleDayDto {
   /** Время начала практики "HH:mm" — для окна подключения на клиенте. */
   @ApiProperty({ required: false }) startTime?: string;
   @ApiProperty({ required: false }) lessonOrder?: number;
+  /** Практика первой недели закрыта: текст оверлея поверх заблюренной карточки. */
+  @ApiProperty({ required: false }) blurNotice?: string;
 }
 
 export class MeProfileDto {

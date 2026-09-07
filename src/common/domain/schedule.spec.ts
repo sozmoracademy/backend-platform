@@ -71,6 +71,7 @@ describe("weekPlan", () => {
       meetings: [],
       week,
       today,
+      firstWeek: false,
       dayAgendaOf: () => [],
     });
     expect(days[6]!.kind).toBe("rest");
@@ -86,9 +87,55 @@ describe("weekPlan", () => {
       meetings: [],
       week,
       today,
+      firstWeek: false,
       dayAgendaOf: () => [],
     });
     expect(days[1]!.status).toBe("today");
+  });
+
+  it("firstWeek: практика закрыта и заблюрена, теория — нет", () => {
+    const week = [
+      "2026-08-17",
+      "2026-08-18",
+      "2026-08-19",
+      "2026-08-20",
+      "2026-08-21",
+      "2026-08-22",
+      "2026-08-23",
+    ];
+    const days = weekPlan({
+      openedUpTo: 1,
+      completedOrders: new Set(),
+      lessons,
+      meetings: [],
+      week,
+      today,
+      firstWeek: true,
+      dayAgendaOf: () => [],
+    });
+    // Ритм: [theory, practice, theory, practice, theory, practice, rest]
+    expect(days[1]!.kind).toBe("practice");
+    expect(days[1]!.status).toBe("locked");
+    expect(days[1]!.blurNotice).toBe("Практика начнётся со следующей недели");
+    expect(days[1]!.meetUrl).toBeUndefined();
+    expect(days[0]!.kind).toBe("theory");
+    expect(days[0]!.blurNotice).toBeUndefined();
+  });
+
+  it("без урока не показывает «Видео · N мин»", () => {
+    const week = ["2026-08-17"];
+    const days = weekPlan({
+      openedUpTo: 1,
+      completedOrders: new Set(),
+      lessons: [],
+      meetings: [],
+      week,
+      today,
+      firstWeek: false,
+      dayAgendaOf: () => [],
+    });
+    expect(days[0]!.kind).toBe("theory");
+    expect(days[0]!.meta).toBe("");
   });
 });
 
