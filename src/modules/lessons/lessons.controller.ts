@@ -6,6 +6,7 @@ import { LessonsService } from "./lessons.service";
 import { CreateLessonRequestDto } from "./dto/create-lesson.dto";
 import { LessonCatalogItemDto } from "./dto/lesson-catalog-item.dto";
 import { LessonEditorDto, UpdateLessonRequestDto } from "./dto/lesson-editor.dto";
+import { LinkLessonVideoRequestDto } from "./dto/link-lesson-video.dto";
 import { VideoUploadTicketDto } from "./dto/video-upload-ticket.dto";
 
 /**
@@ -42,6 +43,17 @@ export class LessonsController {
   @Post(":order/video/upload")
   requestVideoUpload(@Param() params: ProductOrderParamDto): Promise<VideoUploadTicketDto> {
     return this.lessons.requestVideoUpload(params.productId, params.order);
+  }
+
+  // Привязать к уроку видео другого урока (одно видео Bunny на уроки разных
+  // продуктов — напр. одинаковые уроки 3- и 6-месячного курса). Без заливки.
+  @Roles("CURATOR")
+  @Post(":order/video/link-from")
+  linkVideoFrom(
+    @Param() params: ProductOrderParamDto,
+    @Body() body: LinkLessonVideoRequestDto,
+  ): Promise<LessonEditorDto> {
+    return this.lessons.linkVideoFrom(params.productId, params.order, body);
   }
 
   @Roles("CURATOR")

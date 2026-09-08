@@ -8,6 +8,7 @@ import {
   PreviewVideoDto,
   SetPreviewVideoRequestDto,
 } from "./dto/course-product.dto";
+import { VideoLibraryItemDto } from "./dto/video-library-item.dto";
 
 /** `courses` — справочники, доступны обеим ролям (BACKEND.md §2.3, §12). */
 @ApiTags("courses")
@@ -23,6 +24,14 @@ export class CoursesController {
   @Get("blocks")
   blocks(): Promise<CourseBlockDto[]> {
     return this.courses.blocks();
+  }
+
+  // Каталог доноров для «взять видео из другого курса» — уроки всех продуктов
+  // с уже залитым видео. Привязка идёт через LessonsController .../video/link-from.
+  @Roles("CURATOR")
+  @Get("video-library")
+  videoLibrary(): Promise<VideoLibraryItemDto[]> {
+    return this.courses.videoLibrary();
   }
 
   // Не входит в BACKEND.md §12 — расхождение с MSW-контрактом фронта (TЗ §4.3,

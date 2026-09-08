@@ -74,6 +74,7 @@ export class LessonsRepository {
       title?: string;
       description?: string;
       videoUrl?: string;
+      duration?: string;
       videoAssetId?: string | null;
       videoStatus?: VideoStatus;
       videoDurationSec?: number | null;

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { VideoStatus } from "@prisma/client";
 import { LessonsRepository } from "./lessons.repository";
 import { CourseResolverService } from "../courses/course-resolver.service";
@@ -8,6 +8,7 @@ import { PrismaService } from "../../infra/prisma/prisma.service";
 import { CreateLessonRequestDto } from "./dto/create-lesson.dto";
 import { LessonCatalogItemDto } from "./dto/lesson-catalog-item.dto";
 import { LessonEditorDto, UpdateLessonRequestDto } from "./dto/lesson-editor.dto";
+import { LinkLessonVideoRequestDto } from "./dto/link-lesson-video.dto";
 import { VideoUploadTicketDto } from "./dto/video-upload-ticket.dto";
 
 @Injectable()
@@ -157,6 +158,45 @@ export class LessonsService {
           AND "groupId" IN (SELECT "id" FROM "Group" WHERE "courseProductId" = ${courseProductId})`;
       }
     });
+  }
+
+  /**
+   * Привязать к уроку видео другого урока без повторной заливки в Bunny: обе
+   * записи `Lesson` начинают ссылаться на один `videoAssetId` (GUID). Копируем
+   * весь видеоблок донора — `videoAssetId` + `videoStatus` + `videoDurationSec`
+   * + `duration` + fallback `videoUrl`. Bunny не трогаем; статус донора уже
+   * поддерживается webhook'ом/`reconcile` через `updateMany where videoAssetId`,
+   * поэтому если донор ещё `processing`, целевой урок «доедет» до `ready` тем же
+   * событием. Повторная заливка видео на одном из уроков (`requestVideoUpload`)
+   * ставит НОВЫЙ GUID только этому уроку — связь разрывается, второй продолжает
+   * играть прежний файл.
+   */
+  async linkVideoFrom(
+    courseProductId: string,
+    order: number,
+    body: LinkLessonVideoRequestDto,
+  ): Promise<LessonEditorDto> {
+    const product = await this.resolver.byId(courseProductId);
+    const target = await this.lessons.findByOrder(courseProductId, order);
+    if (!target) throw new NotFoundException("Урок не найден");
+
+    const source = await this.lessons.findByOrder(body.sourceProductId, body.sourceOrder);
+    if (!source) throw new NotFoundException("Урок-донор не найден");
+    if (source.id === target.id) {
+      throw new BadRequestException("Нельзя привязать урок к самому себе");
+    }
+    if (!source.videoAssetId || source.videoStatus === "none" || source.videoStatus === "failed") {
+      throw new BadRequestException("У урока-донора нет готового видео");
+    }
+
+    const updated = await this.lessons.update(courseProductId, order, {
+      videoAssetId: source.videoAssetId,
+      videoStatus: source.videoStatus,
+      videoDurationSec: source.videoDurationSec,
+      duration: source.duration,
+      videoUrl: source.videoUrl,
+    });
+    return this.toEditorDto(courseProductId, product.language, product.format, updated);
   }
 
   /**

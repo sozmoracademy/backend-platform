@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../infra/prisma/prisma.service";
 import { CourseBlockDto, CourseLevelPlanEntryDto, CourseProductDto } from "./dto/course-product.dto";
+import { VideoLibraryItemDto } from "./dto/video-library-item.dto";
 
 @Injectable()
 export class CoursesService {
@@ -38,6 +39,31 @@ export class CoursesService {
    * (расхождение с фактическим MSW-контрактом фронта, см. отчёт по расхождениям),
    * временно подменяет `videoUrl` во всех уроках. Хранится в singleton `AppSettings`.
    */
+  /**
+   * Все уроки всех продуктов, у которых уже есть видео в Bunny (`ready` или
+   * `processing`). Источник выбора урока-донора для `link-from`. `failed`/`none`
+   * не отдаём — переиспользовать нечего.
+   */
+  async videoLibrary(): Promise<VideoLibraryItemDto[]> {
+    const rows = await this.prisma.lesson.findMany({
+      where: { videoAssetId: { not: null }, videoStatus: { in: ["ready", "processing"] } },
+      include: { courseProduct: true },
+      orderBy: [{ courseProduct: { durationMonths: "asc" } }, { order: "asc" }],
+    });
+    return rows.map((l) => ({
+      productId: l.courseProductId,
+      productTitle: l.courseProduct.title,
+      language: l.courseProduct.language,
+      format: l.courseProduct.format,
+      durationMonths: l.courseProduct.durationMonths,
+      lessonId: l.id,
+      order: l.order,
+      lessonTitle: l.title,
+      videoStatus: l.videoStatus,
+      videoDurationSec: l.videoDurationSec,
+    }));
+  }
+
   async previewVideo(): Promise<{ url: string | null }> {
     const row = await this.prisma.appSettings.findUnique({ where: { id: "singleton" } });
     return { url: row?.previewVideoUrl ?? null };
