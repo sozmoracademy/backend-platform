@@ -246,6 +246,9 @@ export class StudentsService {
       login: student.user.login,
       password: plainPassword,
       groupName: group?.name ?? null,
+      phone: student.phone,
+      language: student.language,
+      durationMonths: product.durationMonths,
     };
   }
 

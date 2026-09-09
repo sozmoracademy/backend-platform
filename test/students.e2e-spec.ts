@@ -60,6 +60,10 @@ describe("students (e2e)", () => {
     expect(created.body.login).toBe("e2e-newstudent");
     // Пароль приходит с формы и возвращается как есть (хранится bcrypt-хешем).
     expect(created.body.password).toBe("abcde");
+    // Поля для приветственного сообщения куратора (экран «Ученик создан»).
+    expect(created.body.phone).toBe("+996700000000");
+    expect(created.body.language).toBe("en");
+    expect(created.body.durationMonths).toBe(1); // INDIVIDUAL — 1 месяц
 
     // Дубликат логина отклоняется.
     await request(app.getHttpServer())

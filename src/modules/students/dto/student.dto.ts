@@ -210,6 +210,11 @@ export class CreateStudentResponseDto {
   @ApiProperty() login!: string;
   @ApiProperty() password!: string;
   @ApiProperty({ nullable: true }) groupName!: string | null;
+  /** Телефон ученика — для приветственного сообщения куратора (копируется отдельной кнопкой). */
+  @ApiProperty() phone!: string;
+  @ApiProperty({ enum: ["en", "ru"] }) language!: Lang;
+  /** Длительность курса в месяцах (из продукта зачисления) — для текста сообщения. */
+  @ApiProperty() durationMonths!: number;
 }
 
 export class ResetStudentPasswordResponseDto {
