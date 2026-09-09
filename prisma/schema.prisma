@@ -222,6 +222,8 @@ model Student {
   @@index([teacherId])
   @@index([status])
   @@index([language, type])
+  // perf: список учеников и CSV-экспорт всегда идут `orderBy createdAt desc`.
+  @@index([createdAt])
 }
 
 model StudentLesson {
@@ -234,6 +236,9 @@ model StudentLesson {
   updatedAt   DateTime  @updatedAt
 
   @@id([studentId, lessonId])
+  // perf: счётчики в редакторе урока (`countCompleted`/`countInProgress`) фильтруют
+  // по одному `lessonId` — в составном PK это вторая колонка, отдельный индекс нужен.
+  @@index([lessonId])
 }
 
 model Payment {
@@ -267,6 +272,8 @@ model Meeting {
   @@index([date])
   @@index([groupId])
   @@index([studentId])
+  // perf: каталог курса (`ordersWithPractice`) джойнит Meeting по `lessonId`.
+  @@index([lessonId])
 }
 
 model MeetingAttendance {

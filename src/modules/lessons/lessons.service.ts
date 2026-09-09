@@ -78,9 +78,12 @@ export class LessonsService {
     const product = await this.resolver.byId(courseProductId);
     const lesson = await this.lessons.findByOrder(courseProductId, order);
     if (!lesson) throw new NotFoundException("Урок не найден");
-    // Fallback, если webhook Bunny не дошёл: сверяемся с Bunny и фиксируем ready/failed.
+    // Fallback, если webhook Bunny не дошёл: сверку с Bunny запускаем в фоне, не
+    // блокируя ответ внешним HTTP-вызовом. Текущий статус отдаём сразу; если Bunny
+    // уже `ready`, это подхватит следующее открытие редактора (или webhook раньше).
     if (lesson.videoStatus === "processing" && lesson.videoAssetId) {
-      lesson.videoStatus = await this.media.reconcile(lesson.videoAssetId, lesson.videoStatus);
+      const assetId = lesson.videoAssetId;
+      void this.media.reconcile(assetId, lesson.videoStatus).catch(() => undefined);
     }
     return this.toEditorDto(courseProductId, product.language, product.format, lesson);
   }
@@ -103,6 +106,7 @@ export class LessonsService {
       duration: body.duration?.trim() || "00:00",
       block: body.block.trim(),
     });
+    this.resolver.invalidate(courseProductId); // изменилось число уроков продукта
     return this.toEditorDto(courseProductId, product.language, product.format, lesson);
   }
 
@@ -158,6 +162,8 @@ export class LessonsService {
           AND "groupId" IN (SELECT "id" FROM "Group" WHERE "courseProductId" = ${courseProductId})`;
       }
     });
+
+    this.resolver.invalidate(courseProductId); // изменилось число уроков продукта
   }
 
   /**

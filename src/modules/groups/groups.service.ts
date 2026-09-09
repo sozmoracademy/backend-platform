@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Group, Teacher } from "@prisma/client";
+import type { CourseProduct, Group, Teacher } from "@prisma/client";
 import { GroupsRepository } from "./groups.repository";
 import {
   currentLessonOrder,
@@ -46,10 +46,18 @@ export class GroupsService {
     return d.toISOString().slice(0, 10);
   }
 
-  private async toSummary(group: GroupWithTeacher): Promise<GroupSummaryDto> {
-    const product = await this.resolver.byId(group.courseProductId);
+  /**
+   * perf: `preloaded` передаётся из `list()`, где продукт и число уроков получены
+   * пачкой на весь список (без N+1). Остальные вызовы (create/update/detail —
+   * одна группа) продукт резолвят сами; `resolver` их кэширует.
+   */
+  private async toSummary(
+    group: GroupWithTeacher,
+    preloaded?: { product: CourseProduct; lessonCount: number },
+  ): Promise<GroupSummaryDto> {
+    const product = preloaded?.product ?? (await this.resolver.byId(group.courseProductId));
     const levelPlan = (product.levelPlan as unknown as LevelPlanEntry[]) ?? [];
-    const lessonCount = await this.resolver.countLessons(group.courseProductId);
+    const lessonCount = preloaded?.lessonCount ?? (await this.resolver.countLessons(group.courseProductId));
     const stage = groupStage(group.currentLesson, levelPlan, lessonCount, product.durationMonths);
     return {
       id: group.id,
@@ -76,15 +84,26 @@ export class GroupsService {
   }
 
   async list(query: GroupsQueryDto): Promise<GroupsListDto> {
-    const rows = await this.repo.findMany({
-      status: query.status ?? "all",
-      language: query.language ?? "all",
-    });
-    const items = await Promise.all(rows.map((g) => this.toSummary(g)));
-    const [enCount, ruCount] = await Promise.all([
+    const [rows, products, lessonCounts, enCount, ruCount] = await Promise.all([
+      this.repo.findMany({
+        status: query.status ?? "all",
+        language: query.language ?? "all",
+      }),
+      this.resolver.allProducts(),
+      this.resolver.lessonCountsByProduct(),
       this.repo.countByLanguage("en"),
       this.repo.countByLanguage("ru"),
     ]);
+    const productById = new Map(products.map((p) => [p.id, p]));
+    const items = await Promise.all(
+      rows.map((g) => {
+        const product = productById.get(g.courseProductId);
+        return this.toSummary(
+          g,
+          product ? { product, lessonCount: lessonCounts.get(g.courseProductId) ?? 0 } : undefined,
+        );
+      }),
+    );
     return {
       items,
       byLanguage: [

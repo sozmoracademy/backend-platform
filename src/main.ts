@@ -6,6 +6,7 @@ import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { Logger } from "nestjs-pino";
 import helmet from "helmet";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 
@@ -19,6 +20,9 @@ async function bootstrap() {
   app.set("trust proxy", 1);
 
   app.use(helmet());
+  // gzip/deflate на JSON-ответы — списки учеников/групп/каталог уроков едут в разы
+  // меньше по объёму (заметно на медленных каналах).
+  app.use(compression());
   app.use(cookieParser());
   app.enableCors({
     origin: config.get<string[]>("cors.origin"),

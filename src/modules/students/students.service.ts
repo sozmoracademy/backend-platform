@@ -89,71 +89,73 @@ export class StudentsService {
       teacherId: query.teacherId ?? "all",
     };
     const page = query.page ?? 1;
-    const { items, total } = await this.repo.findPage(filter, page, new Date(`${today}T00:00:00.000Z`));
 
-    const productCache = new Map<string, CourseProduct>();
-    const lessonCountCache = new Map<string, number>();
-    const productFor = async (s: {
+    // perf: продукты и число уроков по продукту — по одному запросу на всю
+    // страницу (раньше был N+1: резолв продукта + count на каждого ученика).
+    const [{ items, total }, products, lessonCounts] = await Promise.all([
+      this.repo.findPage(filter, page, new Date(`${today}T00:00:00.000Z`)),
+      this.resolver.allProducts(),
+      this.resolver.lessonCountsByProduct(),
+    ]);
+
+    const productById = new Map(products.map((p) => [p.id, p]));
+    const individualByLang = new Map(
+      products.filter((p) => p.format === "INDIVIDUAL").map((p) => [p.language, p]),
+    );
+    const productFor = (s: {
       language: Student["language"];
       type: Student["type"];
-      groupId: string | null;
-    }) => {
-      const key = s.type === "INDIVIDUAL" ? `ind:${s.language}` : `grp:${s.groupId}`;
-      if (!productCache.has(key)) productCache.set(key, await this.resolver.forStudent(s));
-      return productCache.get(key)!;
-    };
-    const lessonCountFor = async (courseProductId: string) => {
-      if (!lessonCountCache.has(courseProductId)) {
-        lessonCountCache.set(courseProductId, await this.resolver.countLessons(courseProductId));
-      }
-      return lessonCountCache.get(courseProductId)!;
-    };
+      group: { courseProductId: string } | null;
+    }): CourseProduct | undefined =>
+      s.type === "INDIVIDUAL"
+        ? individualByLang.get(s.language)
+        : s.group
+          ? productById.get(s.group.courseProductId)
+          : undefined;
 
-    const mapped = await Promise.all(
-      items.map(async (s) => {
-        const product = await productFor(s);
-        const lessonsTotal = await lessonCountFor(product.id);
-        const completedOrders = new Set(s.lessons.map((l) => l.lesson.order));
-        const payment = s.payment;
-        return {
-          id: s.id,
-          firstName: s.firstName,
-          lastName: s.lastName,
-          avatarTone: s.avatarTone,
-          login: s.user.login,
-          phone: s.phone,
-          language: s.language,
-          type: s.type,
-          productTitle: product?.title ?? "",
-          groupCode: s.group?.code ?? null,
-          groupName: s.group?.name ?? null,
-          startDate: this.toDateStr(s.startDate),
-          endDate: this.toDateStr(s.endDate),
-          currentLessonOrder: currentLessonOrder(s.openedUpTo, completedOrders),
-          lessonsTotal,
-          progressPct: progressPercent(completedOrders.size, lessonsTotal),
-          payment: payment
-            ? {
-                status: this.paymentStatus(payment.paid, payment.totalCost),
-                paid: payment.paid,
-                total: payment.totalCost,
-                currency: product?.currency ?? "сом",
-                remaining: Math.max(0, payment.totalCost - payment.paid),
-                purchaseDate: this.toDateStr(payment.purchaseDate),
-              }
-            : {
-                status: "unpaid" as const,
-                paid: 0,
-                total: 0,
-                currency: product?.currency ?? "сом",
-                remaining: 0,
-                purchaseDate: this.toDateStr(s.startDate),
-              },
-          lastActivity: this.toDateStr(s.lastActivity),
-          accessStatus: this.accessStatusOf(s, today),
-        };
-      }),
-    );
+    const mapped = items.map((s) => {
+      const product = productFor(s);
+      const lessonsTotal = product ? (lessonCounts.get(product.id) ?? 0) : 0;
+      const completedOrders = new Set(s.lessons.map((l) => l.lesson.order));
+      const payment = s.payment;
+      return {
+        id: s.id,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        avatarTone: s.avatarTone,
+        login: s.user.login,
+        phone: s.phone,
+        language: s.language,
+        type: s.type,
+        productTitle: product?.title ?? "",
+        groupCode: s.group?.code ?? null,
+        groupName: s.group?.name ?? null,
+        startDate: this.toDateStr(s.startDate),
+        endDate: this.toDateStr(s.endDate),
+        currentLessonOrder: currentLessonOrder(s.openedUpTo, completedOrders),
+        lessonsTotal,
+        progressPct: progressPercent(completedOrders.size, lessonsTotal),
+        payment: payment
+          ? {
+              status: this.paymentStatus(payment.paid, payment.totalCost),
+              paid: payment.paid,
+              total: payment.totalCost,
+              currency: product?.currency ?? "сом",
+              remaining: Math.max(0, payment.totalCost - payment.paid),
+              purchaseDate: this.toDateStr(payment.purchaseDate),
+            }
+          : {
+              status: "unpaid" as const,
+              paid: 0,
+              total: 0,
+              currency: product?.currency ?? "сом",
+              remaining: 0,
+              purchaseDate: this.toDateStr(s.startDate),
+            },
+        lastActivity: this.toDateStr(s.lastActivity),
+        accessStatus: this.accessStatusOf(s, today),
+      };
+    });
 
     return { items: mapped, total, page, pageSize: PAGE_SIZE };
   }
@@ -292,11 +294,14 @@ export class StudentsService {
   async header(id: string): Promise<StudentHeaderDto> {
     const student = await this.loadOrThrow(id);
     const today = this.today();
-    const product = await this.productFor(student);
+    // perf: независимые чтения — параллельно (раньше 4 запроса подряд).
+    const [product, completed, meetings] = await Promise.all([
+      this.productFor(student),
+      this.repo.findCompletedOrders(id),
+      this.repo.findMeetingsFor(student),
+    ]);
     const lessonsTotal = await this.resolver.countLessons(product.id);
-    const completed = await this.repo.findCompletedOrders(id);
     const completedOrders = new Set(completed.map((l) => l.lessonOrder));
-    const meetings = await this.repo.findMeetingsFor(student);
     const nextMeeting = meetings.find((m) => m.status === "scheduled" && this.toDateStr(m.date) >= today);
 
     return {
@@ -365,15 +370,20 @@ export class StudentsService {
 
   async learning(id: string): Promise<StudentLearningDto> {
     const student = await this.loadOrThrow(id);
-    const completed = await this.repo.findCompletedOrders(id);
+    // perf: независимые чтения — параллельно (раньше 6 запросов подряд).
+    const [completed, product, attempts] = await Promise.all([
+      this.repo.findCompletedOrders(id),
+      this.productFor(student),
+      this.repo.findAttemptsForStudent(id),
+    ]);
     const completedOrders = new Set(completed.map((l) => l.lessonOrder));
     const order = currentLessonOrder(student.openedUpTo, completedOrders);
-    const product = await this.productFor(student);
     const levelPlan = (product.levelPlan as unknown as LevelPlanEntry[]) ?? [];
-    const lessonCount = await this.resolver.countLessons(product.id);
-
-    const tests = await this.repo.findTestsWithQuestionCount(product.id);
-    const attempts = await this.repo.findAttemptsForStudent(id);
+    const [lessonCount, tests, allLessons] = await Promise.all([
+      this.resolver.countLessons(product.id),
+      this.repo.findTestsWithQuestionCount(product.id),
+      this.repo.findAllLessonsLight(product.id),
+    ]);
     const testIdByLessonOrder = new Map(tests.map((t) => [t.lessonOrder, t.id]));
     const attemptsByTest = new Map<string, AttemptLike[]>();
     for (const a of attempts) {
@@ -387,8 +397,6 @@ export class StudentsService {
       attemptsByTest,
       testIdByLessonOrder,
     });
-
-    const allLessons = await this.repo.findAllLessonsLight(product.id);
 
     // Тест-гейт (ТЗ инвариант 4): для состояния уроков нужен набор «зачтённых» тестов.
     const orderByTestId = new Map(tests.map((t) => [t.id, t.lessonOrder]));
@@ -461,15 +469,20 @@ export class StudentsService {
   async progress(id: string): Promise<StudentProgressDto> {
     const student = await this.loadOrThrow(id);
     const today = this.today();
-    const product = await this.productFor(student);
-    const lessonsTotal = await this.resolver.countLessons(product.id);
-    const completed = await this.repo.findCompletedOrders(id);
+    // perf: независимые чтения — параллельно (раньше 6 запросов подряд).
+    const [product, completed, meetings, attempts] = await Promise.all([
+      this.productFor(student),
+      this.repo.findCompletedOrders(id),
+      this.repo.findMeetingsFor(student),
+      this.repo.findAttemptsForStudent(id),
+    ]);
     const completedOrders = new Set(completed.map((l) => l.lessonOrder));
-    const meetings = await this.repo.findMeetingsFor(student);
     const ps = practiceStats(meetings);
 
-    const tests = await this.repo.findTestsWithQuestionCount(product.id);
-    const attempts = await this.repo.findAttemptsForStudent(id);
+    const [lessonsTotal, tests] = await Promise.all([
+      this.resolver.countLessons(product.id),
+      this.repo.findTestsWithQuestionCount(product.id),
+    ]);
     const testIdByLessonOrder = new Map(tests.map((t) => [t.lessonOrder, t.id]));
     const attemptsByTest = new Map<string, AttemptLike[]>();
     for (const a of attempts) {
