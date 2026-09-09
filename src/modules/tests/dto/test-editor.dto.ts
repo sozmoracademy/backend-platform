@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsBoolean, IsEnum, IsOptional, IsString, Min, MinLength, IsInt } from "class-validator";
-import type { QuestionType, TestStatus } from "@prisma/client";
+import type { CourseType, Lang, QuestionType, TestStatus } from "@prisma/client";
 
 export class TestEditorOptionDto {
   @ApiProperty() id!: string;
@@ -33,6 +33,36 @@ export class CreateTestRequestDto {
   @IsString()
   @MinLength(1)
   lessonId!: string;
+}
+
+/**
+ * `GET /tests/library` (роль C) — один тест-донор из любого продукта для «взять
+ * тест из другого курса» (`features/copy-lesson-test`). Отдаются только тесты с
+ * >= 1 вопросом — пустой копировать нечего. Тест привязан к уроку жёстко
+ * (`LessonTest.lessonId @unique`), поэтому это копия, а не общая ссылка (в
+ * отличие от видео).
+ */
+export class TestLibraryItemDto {
+  @ApiProperty() productId!: string;
+  @ApiProperty() productTitle!: string;
+  @ApiProperty({ enum: ["en", "ru"] }) language!: Lang;
+  @ApiProperty({ enum: ["GROUP", "INDIVIDUAL"] }) format!: CourseType;
+  @ApiProperty() durationMonths!: number;
+  @ApiProperty() lessonId!: string;
+  @ApiProperty({ description: "Номер урока-донора в пределах его продукта." }) lessonOrder!: number;
+  @ApiProperty() lessonTitle!: string;
+  @ApiProperty() testId!: string;
+  @ApiProperty() testTitle!: string;
+  @ApiProperty({ enum: ["draft", "published"] }) status!: TestStatus;
+  @ApiProperty() questionCount!: number;
+}
+
+/** `POST /tests/lesson/:lessonId/copy-from` — скопировать в тест урока содержимое теста-донора. */
+export class CopyTestFromRequestDto {
+  @ApiProperty({ description: "Урок-донор — его тест копируется в целевой урок." })
+  @IsString()
+  @MinLength(1)
+  sourceLessonId!: string;
 }
 
 export class UpdateTestRequestDto {

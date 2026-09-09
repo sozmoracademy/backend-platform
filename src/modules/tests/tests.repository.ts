@@ -24,7 +24,7 @@ export class TestsRepository {
         ...(publishedOnly ? { status: "published" as const } : {}),
       },
       include: {
-        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        questions: { include: { options: { orderBy: { id: "asc" } } }, orderBy: { order: "asc" } },
         lesson: { select: { id: true, order: true } },
       },
     });
@@ -34,7 +34,7 @@ export class TestsRepository {
     return this.prisma.lessonTest.findUnique({
       where: { id: testId },
       include: {
-        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        questions: { include: { options: { orderBy: { id: "asc" } } }, orderBy: { order: "asc" } },
         lesson: { select: { id: true, order: true } },
       },
     });
@@ -100,16 +100,32 @@ export class TestsRepository {
     return this.prisma.lessonTest.findFirst({
       where: { lessonId },
       include: {
-        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        questions: { include: { options: { orderBy: { id: "asc" } } }, orderBy: { order: "asc" } },
         lesson: { select: { id: true, order: true } },
       },
+    });
+  }
+
+  /**
+   * Все тесты всех продуктов с >= 1 вопросом — каталог доноров для «взять тест из
+   * другого курса» (`features/copy-lesson-test` во фронте). Пустой тест копировать
+   * нечего. Порядок: короткие курсы → длинные, внутри — по номеру урока.
+   */
+  findAllTestsForLibrary() {
+    return this.prisma.lessonTest.findMany({
+      where: { questions: { some: {} } },
+      include: {
+        _count: { select: { questions: true } },
+        lesson: { include: { courseProduct: true } },
+      },
+      orderBy: [{ lesson: { courseProduct: { durationMonths: "asc" } } }, { lesson: { order: "asc" } }],
     });
   }
 
   createTest(data: { lessonId: string; title: string }) {
     return this.prisma.lessonTest.create({
       data: { lessonId: data.lessonId, title: data.title },
-      include: { questions: { include: { options: true }, orderBy: { order: "asc" } } },
+      include: { questions: { include: { options: { orderBy: { id: "asc" } } }, orderBy: { order: "asc" } } },
     });
   }
 
@@ -121,9 +137,48 @@ export class TestsRepository {
       where: { id },
       data,
       include: {
-        questions: { include: { options: true }, orderBy: { order: "asc" } },
+        questions: { include: { options: { orderBy: { id: "asc" } } }, orderBy: { order: "asc" } },
         lesson: { select: { id: true, order: true } },
       },
+    });
+  }
+
+  /**
+   * Заменить содержимое теста содержимым другого теста (копия «взять тест из
+   * другого курса»). В одной транзакции: снести все вопросы целевого теста
+   * (варианты уходят каскадом), перенести время/проходной балл, создать вопросы и
+   * варианты заново. Статус теста и его привязку к уроку не трогаем.
+   */
+  replaceTestContent(
+    testId: string,
+    data: {
+      timeLimitSec: number;
+      passingScore: number;
+      questions: {
+        text: string;
+        type: "single" | "multiple";
+        order: number;
+        options: { text: string; isCorrect: boolean }[];
+      }[];
+    },
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.testQuestion.deleteMany({ where: { testId } });
+      await tx.lessonTest.update({
+        where: { id: testId },
+        data: { timeLimitSec: data.timeLimitSec, passingScore: data.passingScore },
+      });
+      for (const q of data.questions) {
+        await tx.testQuestion.create({
+          data: {
+            testId,
+            text: q.text,
+            type: q.type,
+            order: q.order,
+            options: { create: q.options.map((o) => ({ text: o.text, isCorrect: o.isCorrect })) },
+          },
+        });
+      }
     });
   }
 

@@ -5,8 +5,10 @@ import { Roles } from "../../common/decorators/roles.decorator";
 import { IdParamDto } from "../../common/dto/id-param.dto";
 import { TestsEditorService } from "./tests-editor.service";
 import {
+  CopyTestFromRequestDto,
   CreateTestRequestDto,
   TestEditorDto,
+  TestLibraryItemDto,
   UpdateOptionRequestDto,
   UpdateQuestionRequestDto,
   UpdateTestRequestDto,
@@ -25,6 +27,20 @@ export class TestsEditorController {
     // Явный JSON `null` (не пустое тело, BACKEND.md §12) — Nest иначе отдаёт `null`
     // как пустой ответ без тела, который `response.json()` на фронте не распарсит.
     res.status(HttpStatus.OK).json(test);
+  }
+
+  // Каталог тестов-доноров для «взять тест из другого курса» — тесты всех
+  // продуктов с >= 1 вопросом. Копирование идёт через POST .../copy-from.
+  @Get("tests/library")
+  library(): Promise<TestLibraryItemDto[]> {
+    return this.editor.library();
+  }
+
+  // Скопировать в тест урока содержимое теста другого урока (напр. одинаковые
+  // уроки 3- и 6-месячного курса). Это копия — тесты потом независимы.
+  @Post("tests/lesson/:id/copy-from")
+  copyFrom(@Param() params: IdParamDto, @Body() body: CopyTestFromRequestDto): Promise<TestEditorDto> {
+    return this.editor.copyFrom(params.id, body);
   }
 
   @Post("tests")

@@ -2,8 +2,10 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import type { LessonTest, QuestionOption, TestQuestion } from "@prisma/client";
 import { TestsRepository } from "./tests.repository";
 import {
+  CopyTestFromRequestDto,
   CreateTestRequestDto,
   TestEditorDto,
+  TestLibraryItemDto,
   UpdateOptionRequestDto,
   UpdateQuestionRequestDto,
   UpdateTestRequestDto,
@@ -46,6 +48,65 @@ export class TestsEditorService {
   async byLessonId(lessonId: string): Promise<TestEditorDto | null> {
     const test = await this.repo.findFullByLessonId(lessonId);
     return test ? this.toDto(test) : null;
+  }
+
+  /** Каталог тестов-доноров (все продукты, тесты с >= 1 вопросом). */
+  async library(): Promise<TestLibraryItemDto[]> {
+    const rows = await this.repo.findAllTestsForLibrary();
+    return rows.map((t) => ({
+      productId: t.lesson.courseProduct.id,
+      productTitle: t.lesson.courseProduct.title,
+      language: t.lesson.courseProduct.language,
+      format: t.lesson.courseProduct.format,
+      durationMonths: t.lesson.courseProduct.durationMonths,
+      lessonId: t.lesson.id,
+      lessonOrder: t.lesson.order,
+      lessonTitle: t.lesson.title,
+      testId: t.id,
+      testTitle: t.title,
+      status: t.status,
+      questionCount: t._count.questions,
+    }));
+  }
+
+  /**
+   * Скопировать в тест целевого урока содержимое теста другого урока (напр.
+   * одинаковые уроки 3- и 6-месячного курса). Тест жёстко привязан к уроку, так
+   * что это именно копия: после копирования тесты независимы. Если у целевого
+   * урока теста ещё нет — он создаётся; если есть — его вопросы заменяются.
+   * Статус целевого теста не меняется.
+   *   404 — урок / тест-донор не найден; 400 — донор без вопросов либо совпадает с целью.
+   */
+  async copyFrom(targetLessonId: string, body: CopyTestFromRequestDto): Promise<TestEditorDto> {
+    const targetLesson = await this.repo.findLessonById(targetLessonId);
+    if (!targetLesson) throw new NotFoundException("Урок не найден");
+    if (body.sourceLessonId === targetLessonId) {
+      throw new BadRequestException("Нельзя скопировать тест в тот же урок");
+    }
+
+    const source = await this.repo.findFullByLessonId(body.sourceLessonId);
+    if (!source) throw new NotFoundException("Тест-донор не найден");
+    if (source.questions.length === 0) {
+      throw new BadRequestException("У теста-донора нет вопросов");
+    }
+
+    let target = await this.repo.findFullByLessonId(targetLessonId);
+    if (!target) {
+      const created = await this.repo.createTest({ lessonId: targetLessonId, title: source.title });
+      target = await this.loadTestOrThrow(created.id);
+    }
+
+    await this.repo.replaceTestContent(target.id, {
+      timeLimitSec: source.timeLimitSec,
+      passingScore: source.passingScore,
+      questions: source.questions.map((q) => ({
+        text: q.text,
+        type: q.type,
+        order: q.order,
+        options: q.options.map((o) => ({ text: o.text, isCorrect: o.isCorrect })),
+      })),
+    });
+    return this.toDto(await this.loadTestOrThrow(target.id));
   }
 
   async create(body: CreateTestRequestDto): Promise<TestEditorDto> {
